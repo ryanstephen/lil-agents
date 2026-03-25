@@ -159,24 +159,62 @@ class LilAgentsController {
         return screen.visibleFrame.origin.y > screen.frame.origin.y
     }
 
+    // MARK: - Auto-hide Dock Tracking
+
+    /// Whether the dock is set to auto-hide in System Preferences
+    private var dockIsAutoHidden: Bool {
+        UserDefaults(suiteName: "com.apple.dock")?.bool(forKey: "autohide") ?? false
+    }
+
+    /// Estimated dock height from the tile size preference (~tileSize + 10px padding)
+    private var estimatedDockHeight: CGFloat {
+        let tileSize = CGFloat(UserDefaults(suiteName: "com.apple.dock")?.double(forKey: "tilesize") ?? 48)
+        return tileSize + 22
+    }
+
+    /// Smoothed Y for character position when dock auto-hides.
+    private var smoothedDockTopY: CGFloat?
+    private static let smoothFactor: CGFloat = 0.12
+
     func tick() {
         guard let screen = activeScreen else { return }
 
         let screenWidth = screen.frame.width
         let dockX: CGFloat
         let dockWidth: CGFloat
-        let dockTopY: CGFloat
+        var dockTopY: CGFloat
 
         if screenHasDock(screen) {
-            // Dock is on this screen — constrain to dock area
+            // Dock always visible — use visibleFrame as-is
             (dockX, dockWidth) = getDockIconArea(screenWidth: screenWidth)
             dockTopY = screen.visibleFrame.origin.y
+            smoothedDockTopY = nil
         } else {
-            // No dock on this screen — use full screen width with small margin
+            // No permanent dock on this screen — use full screen width with small margin
             let margin: CGFloat = 40.0
             dockX = screen.frame.origin.x + margin
             dockWidth = screenWidth - margin * 2
-            dockTopY = screen.frame.origin.y
+
+            if dockIsAutoHidden {
+                // Check if mouse is near the bottom edge of the screen (dock trigger zone)
+                let mouseLocation = NSEvent.mouseLocation
+                let screenBottom = screen.frame.origin.y
+                let mouseNearBottom = mouseLocation.y - screenBottom < 5
+
+                let targetY = mouseNearBottom
+                    ? screenBottom + estimatedDockHeight
+                    : screenBottom
+
+                if let current = smoothedDockTopY {
+                    smoothedDockTopY = current + (targetY - current) * Self.smoothFactor
+                } else {
+                    smoothedDockTopY = targetY
+                }
+                dockTopY = smoothedDockTopY!
+            } else {
+                smoothedDockTopY = nil
+                dockTopY = screen.frame.origin.y
+            }
         }
 
         updateDebugLine(dockX: dockX, dockWidth: dockWidth, dockTopY: dockTopY)
