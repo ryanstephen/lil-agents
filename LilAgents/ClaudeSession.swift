@@ -8,6 +8,7 @@ class ClaudeSession {
     private var lineBuffer = ""
     private(set) var isRunning = false
     private(set) var isBusy = false  // true between send() and result
+    private var currentStreamingResponse = ""
     private static var claudePath: String?
     private static var shellEnvironment: [String: String]?
 
@@ -262,6 +263,7 @@ class ClaudeSession {
                 for block in content {
                     let blockType = block["type"] as? String ?? ""
                     if blockType == "text", let text = block["text"] as? String {
+                        currentStreamingResponse += text
                         onText?(text)
                     } else if blockType == "tool_use" {
                         let toolName = block["name"] as? String ?? "Tool"
@@ -304,9 +306,13 @@ class ClaudeSession {
 
         case "result":
             isBusy = false
-            if let result = json["result"] as? String, !result.isEmpty {
+            let responseText = currentStreamingResponse.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !responseText.isEmpty {
+                history.append(Message(role: .assistant, text: responseText))
+            } else if let result = json["result"] as? String, !result.isEmpty {
                 history.append(Message(role: .assistant, text: result))
             }
+            currentStreamingResponse = ""
             onTurnComplete?()
 
         default:
