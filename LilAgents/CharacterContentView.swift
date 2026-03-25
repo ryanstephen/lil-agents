@@ -54,7 +54,41 @@ class CharacterContentView: NSView {
         return hitRect.contains(localPoint) ? self : nil
     }
 
+    private var dragStartPoint: NSPoint?
+    private var windowStartOrigin: NSPoint?
+    private var isDragging = false
+
     override func mouseDown(with event: NSEvent) {
-        character?.handleClick()
+        dragStartPoint = NSEvent.mouseLocation
+        windowStartOrigin = window?.frame.origin
+        isDragging = false
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let startPoint = dragStartPoint, let startOrigin = windowStartOrigin else { return }
+        let current = NSEvent.mouseLocation
+        let dx = current.x - startPoint.x
+        let dy = current.y - startPoint.y
+
+        if !isDragging && (abs(dx) > 5 || abs(dy) > 5) {
+            isDragging = true
+            character?.startDrag()
+        }
+
+        if isDragging {
+            window?.setFrameOrigin(NSPoint(x: startOrigin.x + dx, y: startOrigin.y + dy))
+            character?.trackDragVelocity()
+        }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if !isDragging {
+            character?.handleClick()
+        } else {
+            character?.endDrag()
+        }
+        isDragging = false
+        dragStartPoint = nil
+        windowStartOrigin = nil
     }
 }

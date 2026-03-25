@@ -105,6 +105,65 @@ class WalkerCharacter {
         window.orderFrontRegardless()
     }
 
+    // MARK: - Drag Support
+
+    var isBeingDragged = false
+    private var dragVelocityX: CGFloat = 0
+    private var lastDragX: CGFloat = 0
+    private var lastDragTime: CFTimeInterval = 0
+    private var isSliding = false
+    private var slideVelocity: CGFloat = 0
+    private var slideY: CGFloat = 0
+    private var lastDockX: CGFloat = 0
+    private var lastDockTopY: CGFloat = 0
+
+    func startDrag() {
+        isBeingDragged = true
+        isSliding = false
+        isWalking = false
+        isPaused = true
+        lastDragX = NSEvent.mouseLocation.x
+        lastDragTime = CACurrentMediaTime()
+        dragVelocityX = 0
+    }
+
+    func trackDragVelocity() {
+        let now = CACurrentMediaTime()
+        let currentX = NSEvent.mouseLocation.x
+        let dt = now - lastDragTime
+        if dt > 0.001 {
+            dragVelocityX = (currentX - lastDragX) / CGFloat(dt)
+        }
+        lastDragX = currentX
+        lastDragTime = now
+    }
+
+    func endDrag() {
+        isBeingDragged = false
+        // Start ice-slide with fling velocity
+        let clampedVelocity = max(-2000, min(2000, dragVelocityX))
+        if abs(clampedVelocity) > 50 {
+            isSliding = true
+            slideVelocity = clampedVelocity
+            slideY = window.frame.origin.y
+        } else {
+            isSliding = false
+            syncPositionFromWindow()
+            pauseEndTime = CACurrentMediaTime() + 2.0
+        }
+    }
+
+    private func syncPositionFromWindow() {
+        if currentTravelDistance > 0 {
+            let rawProgress = (window.frame.origin.x - lastDockX - currentFlipCompensation) / currentTravelDistance
+            positionProgress = max(0, min(1, rawProgress))
+            walkStartPixel = currentTravelDistance * positionProgress
+            walkEndPixel = walkStartPixel
+            walkStartPos = positionProgress
+            walkEndPos = positionProgress
+        }
+    }
+
     // MARK: - Click Handling & Popover
 
     func handleClick() {
@@ -710,6 +769,30 @@ class WalkerCharacter {
 
     func update(dockX: CGFloat, dockWidth: CGFloat, dockTopY: CGFloat) {
         currentTravelDistance = max(dockWidth - displayWidth, 0)
+        lastDockX = dockX
+        lastDockTopY = dockTopY
+        // Don't override window position while user is dragging
+        if isBeingDragged { return }
+        // Ice-slide after fling
+        if isSliding {
+            let friction: CGFloat = 0.92
+            slideVelocity *= friction
+            let dx = slideVelocity * (1.0 / 60.0)
+            var newX = window.frame.origin.x + dx
+            // Bounce off screen edges
+            let screen = window.screen ?? NSScreen.main!
+            let minX = screen.frame.origin.x
+            let maxX = screen.frame.origin.x + screen.frame.width - displayWidth
+            if newX < minX { newX = minX; slideVelocity = -slideVelocity * 0.5 }
+            if newX > maxX { newX = maxX; slideVelocity = -slideVelocity * 0.5 }
+            window.setFrameOrigin(NSPoint(x: newX, y: slideY))
+            if abs(slideVelocity) < 10 {
+                isSliding = false
+                syncPositionFromWindow()
+                pauseEndTime = CACurrentMediaTime() + 2.0
+            }
+            return
+        }
         if isIdleForPopover {
             let travelDistance = currentTravelDistance
             let x = dockX + travelDistance * positionProgress + currentFlipCompensation
