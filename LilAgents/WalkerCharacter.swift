@@ -338,7 +338,6 @@ class WalkerCharacter {
 
     private func wireSession(_ session: ClaudeSession) {
         session.onText = { [weak self] text in
-            self?.currentStreamingText += text
             self?.terminalView?.appendStreamingText(text)
         }
 

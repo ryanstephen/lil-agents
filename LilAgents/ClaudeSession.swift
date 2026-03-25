@@ -6,6 +6,8 @@ class ClaudeSession {
     private var outputPipe: Pipe?
     private var errorPipe: Pipe?
     private var lineBuffer = ""
+    private var currentResponseText = ""
+    private var pendingMessages: [String] = []
     private(set) var isRunning = false
     private(set) var isBusy = false  // true between send() and result
     private static var claudePath: String?
@@ -200,6 +202,12 @@ class ClaudeSession {
             outputPipe = outPipe
             errorPipe = errPipe
             isRunning = true
+            // Flush messages queued before the process was ready
+            let pending = pendingMessages
+            pendingMessages = []
+            for msg in pending {
+                writeMessage(msg, to: inPipe)
+            }
         } catch {
             let msg = "Failed to launch Claude CLI.\n\nMake sure Claude Code is installed and up to date:\n  curl -fsSL https://claude.ai/install.sh | sh\n\nError: \(error.localizedDescription)"
             onError?(msg)
@@ -208,8 +216,16 @@ class ClaudeSession {
     }
 
     func send(message: String) {
-        guard isRunning, let pipe = inputPipe else { return }
+        guard isRunning, let pipe = inputPipe else {
+            pendingMessages.append(message)
+            return
+        }
+        writeMessage(message, to: pipe)
+    }
+
+    private func writeMessage(_ message: String, to pipe: Pipe) {
         isBusy = true
+        currentResponseText = ""
         history.append(Message(role: .user, text: message))
 
         let payload: [String: Any] = [
@@ -222,12 +238,17 @@ class ClaudeSession {
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let jsonStr = String(data: data, encoding: .utf8) else { return }
         let line = jsonStr + "\n"
-        pipe.fileHandleForWriting.write(line.data(using: .utf8)!)
+        do {
+            pipe.fileHandleForWriting.write(line.data(using: .utf8)!)
+        } catch {
+            onError?("Failed to send message: \(error.localizedDescription)")
+        }
     }
 
     func terminate() {
         process?.terminate()
         isRunning = false
+        pendingMessages.removeAll()
     }
 
     // MARK: - NDJSON Parsing
@@ -262,6 +283,7 @@ class ClaudeSession {
                 for block in content {
                     let blockType = block["type"] as? String ?? ""
                     if blockType == "text", let text = block["text"] as? String {
+                        currentResponseText += text
                         onText?(text)
                     } else if blockType == "tool_use" {
                         let toolName = block["name"] as? String ?? "Tool"
@@ -304,9 +326,18 @@ class ClaudeSession {
 
         case "result":
             isBusy = false
+            let finalText: String
             if let result = json["result"] as? String, !result.isEmpty {
-                history.append(Message(role: .assistant, text: result))
+                finalText = result
+            } else if !currentResponseText.isEmpty {
+                finalText = currentResponseText
+            } else {
+                finalText = ""
             }
+            if !finalText.isEmpty {
+                history.append(Message(role: .assistant, text: finalText))
+            }
+            currentResponseText = ""
             onTurnComplete?()
 
         default:
