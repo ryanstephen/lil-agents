@@ -57,7 +57,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         for (i, theme) in PopoverTheme.allThemes.enumerated() {
             let item = NSMenuItem(title: theme.name, action: #selector(switchTheme(_:)), keyEquivalent: "")
             item.tag = i
-            item.state = i == 0 ? .on : .off
+            item.state = theme.name == PopoverTheme.current.name ? .on : .off
             themeMenu.addItem(item)
         }
         themeItem.submenu = themeMenu
