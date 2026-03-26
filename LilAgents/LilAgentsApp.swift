@@ -30,20 +30,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Menu Bar
 
     func setupMenuBar() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if statusItem == nil {
+            statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        }
         if let button = statusItem?.button {
             button.image = NSImage(named: "MenuBarIcon") ?? NSImage(systemSymbolName: "figure.walk", accessibilityDescription: "lil agents")
         }
 
         let menu = NSMenu()
 
-        let char1Item = NSMenuItem(title: "Bruce", action: #selector(toggleChar1), keyEquivalent: "1")
-        char1Item.state = .on
-        menu.addItem(char1Item)
-
-        let char2Item = NSMenuItem(title: "Jazz", action: #selector(toggleChar2), keyEquivalent: "2")
-        char2Item.state = .on
-        menu.addItem(char2Item)
+        // Dynamic character toggle items
+        for (i, config) in CharacterPack.current.characters.enumerated() {
+            let item = NSMenuItem(title: config.displayName, action: #selector(toggleCharacter(_:)), keyEquivalent: "\(i + 1)")
+            item.tag = i
+            item.state = .on
+            menu.addItem(item)
+        }
 
         menu.addItem(NSMenuItem.separator())
 
@@ -62,6 +64,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         themeItem.submenu = themeMenu
         menu.addItem(themeItem)
+
+        // Character pack submenu
+        let packItem = NSMenuItem(title: "Characters", action: nil, keyEquivalent: "")
+        let packMenu = NSMenu()
+        for (i, pack) in CharacterPack.allPacks.enumerated() {
+            let item = NSMenuItem(title: pack.name, action: #selector(switchPack(_:)), keyEquivalent: "")
+            item.tag = i
+            item.state = pack.id == CharacterPack.current.id ? .on : .off
+            packMenu.addItem(item)
+        }
+        packItem.submenu = packMenu
+        menu.addItem(packItem)
 
         // Display submenu
         let displayItem = NSMenuItem(title: "Display", action: nil, keyEquivalent: "")
@@ -130,6 +144,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @objc func switchPack(_ sender: NSMenuItem) {
+        let idx = sender.tag
+        guard idx < CharacterPack.allPacks.count else { return }
+
+        controller?.switchPack(CharacterPack.allPacks[idx])
+
+        // Rebuild menu to reflect new character names
+        setupMenuBar()
+    }
+
     @objc func switchDisplay(_ sender: NSMenuItem) {
         let idx = sender.tag
         controller?.pinnedScreenIndex = idx
@@ -141,22 +165,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc func toggleChar1(_ sender: NSMenuItem) {
-        guard let chars = controller?.characters, chars.count > 0 else { return }
-        let char = chars[0]
-        if char.window.isVisible {
-            char.window.orderOut(nil)
-            char.queuePlayer.pause()
-            sender.state = .off
-        } else {
-            char.window.orderFrontRegardless()
-            sender.state = .on
-        }
-    }
-
-    @objc func toggleChar2(_ sender: NSMenuItem) {
-        guard let chars = controller?.characters, chars.count > 1 else { return }
-        let char = chars[1]
+    @objc func toggleCharacter(_ sender: NSMenuItem) {
+        let idx = sender.tag
+        guard let chars = controller?.characters, idx < chars.count else { return }
+        let char = chars[idx]
         if char.window.isVisible {
             char.window.orderOut(nil)
             char.queuePlayer.pause()

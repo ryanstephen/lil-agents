@@ -3,6 +3,7 @@ import AppKit
 
 class WalkerCharacter {
     let videoName: String
+    var displayName: String = ""
     var window: NSWindow!
     var playerLayer: AVPlayerLayer!
     var queuePlayer: AVQueuePlayer!
@@ -57,6 +58,20 @@ class WalkerCharacter {
 
     init(videoName: String) {
         self.videoName = videoName
+    }
+
+    func applyConfig(_ config: CharacterConfig) {
+        displayName = config.displayName
+        accelStart = config.accelStart
+        fullSpeedStart = config.fullSpeedStart
+        decelStart = config.decelStart
+        walkStop = config.walkStop
+        walkAmountRange = config.walkAmountRange
+        yOffset = config.yOffset
+        flipXOffset = config.flipXOffset
+        characterColor = config.characterColor
+        positionProgress = config.initialPosition
+        pauseEndTime = CACurrentMediaTime() + Double.random(in: config.initialPauseRange)
     }
 
     // MARK: - Setup
@@ -136,15 +151,7 @@ class WalkerCharacter {
         // Show static welcome message instead of Claude terminal
         terminalView?.inputField.isEditable = false
         terminalView?.inputField.placeholderString = ""
-        let welcome = """
-        hey! we're bruce and jazz — your lil dock agents.
-
-        click either of us to open a Claude AI chat. we'll walk around while you work and let you know when Claude's thinking.
-
-        check the menu bar icon (top right) for themes, sounds, and more options.
-
-        click anywhere outside to dismiss, then click us again to start chatting.
-        """
+        let welcome = CharacterPack.current.onboardingWelcome
         terminalView?.appendStreamingText(welcome)
         terminalView?.endStreaming()
 
@@ -393,18 +400,8 @@ class WalkerCharacter {
 
     // MARK: - Thinking Bubble
 
-    private static let thinkingPhrases = [
-        "hmm...", "thinking...", "one sec...", "ok hold on",
-        "let me check", "working on it", "almost...", "bear with me",
-        "on it!", "gimme a sec", "brb", "processing...",
-        "hang tight", "just a moment", "figuring it out",
-        "crunching...", "reading...", "looking..."
-    ]
-
-    private static let completionPhrases = [
-        "done!", "all set!", "ready!", "here you go", "got it!",
-        "finished!", "ta-da!", "voila!"
-    ]
+    private static var thinkingPhrases: [String] { CharacterPack.current.thinkingPhrases }
+    private static var completionPhrases: [String] { CharacterPack.current.completionPhrases }
 
     private var lastPhraseUpdate: CFTimeInterval = 0
     var currentPhrase = ""

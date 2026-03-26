@@ -10,7 +10,11 @@
 		A10000010000000000000001 /* LilAgentsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000001 /* LilAgentsApp.swift */; };
 		A10000010000000000000002 /* walk-bruce-01.mov in Resources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000002 /* walk-bruce-01.mov */; };
 		A10000010000000000000003 /* walk-jazz-01.mov in Resources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000005 /* walk-jazz-01.mov */; };
+		A10000010000000000000004 /* walk-bb8-01.mov in Resources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000006 /* walk-bb8-01.mov */; };
 		A10000010000000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000007 /* Assets.xcassets */; };
+		A10000010000000000000026 /* CharacterPack.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000026 /* CharacterPack.swift */; };
+		A10000010000000000000027 /* walk-r2d2-01.mov in Resources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000027 /* walk-r2d2-01.mov */; };
+		A10000010000000000000028 /* walk-c3po-01.mov in Resources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000028 /* walk-c3po-01.mov */; };
 		A10000010000000000000010 /* Sounds in Resources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000010 /* Sounds */; };
 		A10000010000000000000020 /* PopoverTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000020 /* PopoverTheme.swift */; };
 		A10000010000000000000021 /* CharacterContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000021 /* CharacterContentView.swift */; };
@@ -27,6 +31,10 @@
 		A10000020000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000020000000000000004 /* LilAgents.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LilAgents.entitlements; sourceTree = "<group>"; };
 		A10000020000000000000005 /* walk-jazz-01.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = "walk-jazz-01.mov"; sourceTree = "<group>"; };
+		A10000020000000000000006 /* walk-bb8-01.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = "walk-bb8-01.mov"; sourceTree = "<group>"; };
+		A10000020000000000000026 /* CharacterPack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterPack.swift; sourceTree = "<group>"; };
+		A10000020000000000000027 /* walk-r2d2-01.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = "walk-r2d2-01.mov"; sourceTree = "<group>"; };
+		A10000020000000000000028 /* walk-c3po-01.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = "walk-c3po-01.mov"; sourceTree = "<group>"; };
 		A10000020000000000000007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A10000020000000000000010 /* Sounds */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Sounds; sourceTree = "<group>"; };
 		A10000020000000000000020 /* PopoverTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverTheme.swift; sourceTree = "<group>"; };
@@ -68,8 +76,12 @@
 				A10000020000000000000023 /* TerminalView.swift */,
 				A10000020000000000000024 /* WalkerCharacter.swift */,
 				A10000020000000000000025 /* LilAgentsController.swift */,
+				A10000020000000000000026 /* CharacterPack.swift */,
 				A10000020000000000000002 /* walk-bruce-01.mov */,
 				A10000020000000000000005 /* walk-jazz-01.mov */,
+				A10000020000000000000027 /* walk-r2d2-01.mov */,
+				A10000020000000000000028 /* walk-c3po-01.mov */,
+				A10000020000000000000006 /* walk-bb8-01.mov */,
 				A10000020000000000000007 /* Assets.xcassets */,
 				A10000020000000000000010 /* Sounds */,
 				A10000020000000000000003 /* Info.plist */,
@@ -152,6 +164,9 @@
 			files = (
 				A10000010000000000000002 /* walk-bruce-01.mov in Resources */,
 				A10000010000000000000003 /* walk-jazz-01.mov in Resources */,
+				A10000010000000000000027 /* walk-r2d2-01.mov in Resources */,
+				A10000010000000000000028 /* walk-c3po-01.mov in Resources */,
+				A10000010000000000000004 /* walk-bb8-01.mov in Resources */,
 				A10000010000000000000005 /* Assets.xcassets in Resources */,
 				A10000010000000000000010 /* Sounds in Resources */,
 			);
@@ -171,6 +186,7 @@
 				A10000010000000000000023 /* TerminalView.swift in Sources */,
 				A10000010000000000000024 /* WalkerCharacter.swift in Sources */,
 				A10000010000000000000025 /* LilAgentsController.swift in Sources */,
+				A10000010000000000000026 /* CharacterPack.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
