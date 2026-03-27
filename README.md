@@ -12,7 +12,7 @@ Supports **Claude Code**, **OpenAI Codex**, and **GitHub Copilot** CLIs — swit
 
 - Animated characters rendered from transparent HEVC video
 - Click a character to chat with AI in a themed popover terminal
-- Switch between Claude, Codex, and Copilot from the menubar
+- Choose Claude, Codex, or Copilot per character (Bruce and Jazz) from the menubar
 - Four visual themes: Peach, Midnight, Cloud, Moss
 - Thinking bubbles with playful phrases while your agent works
 - Sound effects on completion

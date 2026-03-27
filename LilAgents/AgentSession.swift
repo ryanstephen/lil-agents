@@ -5,16 +5,33 @@ import Foundation
 enum AgentProvider: String, CaseIterable {
     case claude, codex, copilot
 
-    private static let defaultsKey = "selectedProvider"
+    /// Legacy single-app preference; used as fallback when per-character keys are unset (upgrades).
+    private static let legacyDefaultsKey = "selectedProvider"
 
-    static var current: AgentProvider {
-        get {
-            let raw = UserDefaults.standard.string(forKey: defaultsKey) ?? "claude"
-            return AgentProvider(rawValue: raw) ?? .claude
+    private static func keyedDefaultsKey(forVideoName name: String) -> String {
+        "selectedProvider.\(name)"
+    }
+
+    /// Resolved provider for a character (`walk-bruce-01`, `walk-jazz-01`, …).
+    static func stored(forVideoName name: String) -> AgentProvider {
+        let k = keyedDefaultsKey(forVideoName: name)
+        if let raw = UserDefaults.standard.string(forKey: k),
+           let p = AgentProvider(rawValue: raw) {
+            return p
         }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: defaultsKey)
+        if let raw = UserDefaults.standard.string(forKey: legacyDefaultsKey),
+           let p = AgentProvider(rawValue: raw) {
+            return p
         }
+        return defaultForVideoName(name)
+    }
+
+    static func setStored(_ provider: AgentProvider, forVideoName name: String) {
+        UserDefaults.standard.set(provider.rawValue, forKey: keyedDefaultsKey(forVideoName: name))
+    }
+
+    private static func defaultForVideoName(_ name: String) -> AgentProvider {
+        name.contains("jazz") ? .codex : .claude
     }
 
     var displayName: String {

@@ -14,6 +14,8 @@ struct LilAgentsApp: App {
 class AppDelegate: NSObject, NSApplicationDelegate {
     var controller: LilAgentsController?
     var statusItem: NSStatusItem?
+    private var bruceProviderMenu: NSMenu?
+    private var jazzProviderMenu: NSMenu?
     let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -51,17 +53,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         soundItem.state = .on
         menu.addItem(soundItem)
 
-        // Provider submenu
-        let providerItem = NSMenuItem(title: "Provider", action: nil, keyEquivalent: "")
-        let providerMenu = NSMenu()
+        // Provider submenus (one per character)
+        let bruceProviderItem = NSMenuItem(title: "Bruce Provider", action: nil, keyEquivalent: "")
+        let bruceMenu = NSMenu()
         for (i, provider) in AgentProvider.allCases.enumerated() {
-            let item = NSMenuItem(title: provider.displayName, action: #selector(switchProvider(_:)), keyEquivalent: "")
-            item.tag = i
-            item.state = provider == AgentProvider.current ? .on : .off
-            providerMenu.addItem(item)
+            let item = NSMenuItem(title: provider.displayName, action: #selector(switchCharacterProvider(_:)), keyEquivalent: "")
+            item.tag = 0 * 100 + i
+            bruceMenu.addItem(item)
         }
-        providerItem.submenu = providerMenu
-        menu.addItem(providerItem)
+        bruceProviderItem.submenu = bruceMenu
+        bruceProviderMenu = bruceMenu
+        menu.addItem(bruceProviderItem)
+
+        let jazzProviderItem = NSMenuItem(title: "Jazz Provider", action: nil, keyEquivalent: "")
+        let jazzMenu = NSMenu()
+        for (i, provider) in AgentProvider.allCases.enumerated() {
+            let item = NSMenuItem(title: provider.displayName, action: #selector(switchCharacterProvider(_:)), keyEquivalent: "")
+            item.tag = 1 * 100 + i
+            jazzMenu.addItem(item)
+        }
+        jazzProviderItem.submenu = jazzMenu
+        jazzProviderMenu = jazzMenu
+        menu.addItem(jazzProviderItem)
 
         // Theme submenu
         let themeItem = NSMenuItem(title: "Style", action: nil, keyEquivalent: "")
@@ -105,6 +118,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let quitItem = NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q")
         menu.addItem(quitItem)
 
+        syncProviderMenuCheckmarks()
         statusItem?.menu = menu
     }
 
@@ -142,32 +156,50 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc func switchProvider(_ sender: NSMenuItem) {
-        let idx = sender.tag
+    private func syncProviderMenuCheckmarks() {
+        guard let chars = controller?.characters, chars.count >= 2 else { return }
         let allProviders = AgentProvider.allCases
-        guard idx < allProviders.count else { return }
-        AgentProvider.current = allProviders[idx]
-
-        if let providerMenu = sender.menu {
-            for item in providerMenu.items {
-                item.state = item.tag == idx ? .on : .off
+        let bruce = chars[0].agentProvider
+        let jazz = chars[1].agentProvider
+        if let m = bruceProviderMenu {
+            for item in m.items {
+                let i = item.tag % 100
+                guard i < allProviders.count else { continue }
+                item.state = allProviders[i] == bruce ? .on : .off
             }
         }
-
-        // Terminate existing sessions and clear UI so title/placeholder update
-        controller?.characters.forEach { char in
-            char.session?.terminate()
-            char.session = nil
-            if char.isIdleForPopover {
-                char.closePopover()
+        if let m = jazzProviderMenu {
+            for item in m.items {
+                let i = item.tag % 100
+                guard i < allProviders.count else { continue }
+                item.state = allProviders[i] == jazz ? .on : .off
             }
-            // Always clear popover/bubble so they rebuild with new provider title/placeholder
-            char.popoverWindow?.orderOut(nil)
-            char.popoverWindow = nil
-            char.terminalView = nil
-            char.thinkingBubbleWindow?.orderOut(nil)
-            char.thinkingBubbleWindow = nil
         }
+    }
+
+    @objc func switchCharacterProvider(_ sender: NSMenuItem) {
+        let charIdx = sender.tag / 100
+        let provIdx = sender.tag % 100
+        let allProviders = AgentProvider.allCases
+        guard provIdx < allProviders.count,
+              let chars = controller?.characters,
+              charIdx < chars.count else { return }
+
+        let char = chars[charIdx]
+        char.agentProvider = allProviders[provIdx]
+
+        char.session?.terminate()
+        char.session = nil
+        if char.isIdleForPopover {
+            char.closePopover()
+        }
+        char.popoverWindow?.orderOut(nil)
+        char.popoverWindow = nil
+        char.terminalView = nil
+        char.thinkingBubbleWindow?.orderOut(nil)
+        char.thinkingBubbleWindow = nil
+
+        syncProviderMenuCheckmarks()
     }
 
     @objc func switchDisplay(_ sender: NSMenuItem) {

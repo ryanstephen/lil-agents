@@ -59,6 +59,12 @@ class WalkerCharacter {
         self.videoName = videoName
     }
 
+    /// CLI backend for this character (persisted per `videoName`).
+    var agentProvider: AgentProvider {
+        get { AgentProvider.stored(forVideoName: videoName) }
+        set { AgentProvider.setStored(newValue, forVideoName: videoName) }
+    }
+
     // MARK: - Setup
 
     func setup() {
@@ -139,9 +145,9 @@ class WalkerCharacter {
         let welcome = """
         hey! we're bruce and jazz — your lil dock agents.
 
-        click either of us to open a Claude AI chat. we'll walk around while you work and let you know when Claude's thinking.
+        click either of us to open an AI chat (Claude, Codex, or Copilot). we'll walk around while you work and let you know when your agent's thinking.
 
-        check the menu bar icon (top right) for themes, sounds, and more options.
+        check the menu bar icon (top right) to pick Claude, Codex, or Copilot for each of us, plus themes, sounds, and more.
 
         click anywhere outside to dismiss, then click us again to start chatting.
         """
@@ -194,9 +200,9 @@ class WalkerCharacter {
         hideBubble()
 
         if session == nil {
-            let newSession = AgentProvider.current.createSession()
+            let newSession = agentProvider.createSession()
             session = newSession
-            wireSession(newSession)
+            wireSession(newSession, providerName: agentProvider.displayName)
             newSession.start()
         }
 
@@ -311,7 +317,7 @@ class WalkerCharacter {
         titleBar.layer?.backgroundColor = t.titleBarBg.cgColor
         container.addSubview(titleBar)
 
-        let titleLabel = NSTextField(labelWithString: t.titleString)
+        let titleLabel = NSTextField(labelWithString: agentProvider.titleString(format: t.titleFormat))
         titleLabel.font = t.titleFont
         titleLabel.textColor = t.titleText
         titleLabel.frame = NSRect(x: 12, y: 6, width: 200, height: 16)
@@ -322,7 +328,7 @@ class WalkerCharacter {
         sep.layer?.backgroundColor = t.separatorColor.cgColor
         container.addSubview(sep)
 
-        let terminal = TerminalView(frame: NSRect(x: 0, y: 0, width: popoverWidth, height: popoverHeight - 29))
+        let terminal = TerminalView(frame: NSRect(x: 0, y: 0, width: popoverWidth, height: popoverHeight - 29), agentProvider: agentProvider)
         terminal.characterColor = characterColor
         terminal.themeOverride = themeOverride
         terminal.autoresizingMask = [.width, .height]
@@ -336,7 +342,7 @@ class WalkerCharacter {
         terminalView = terminal
     }
 
-    private func wireSession(_ session: any AgentSession, providerName: String = AgentProvider.current.displayName) {
+    private func wireSession(_ session: any AgentSession, providerName: String) {
         session.onText = { [weak self] text in
             self?.currentStreamingText += text
             self?.terminalView?.appendStreamingText(text)

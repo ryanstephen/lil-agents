@@ -55,13 +55,16 @@ class TerminalView: NSView {
 
     private var currentAssistantText = ""
     private var isStreaming = false
+    private let inputAgentProvider: AgentProvider
 
-    override init(frame: NSRect) {
+    init(frame: NSRect, agentProvider: AgentProvider) {
+        self.inputAgentProvider = agentProvider
         super.init(frame: frame)
         setupViews()
     }
 
     required init?(coder: NSCoder) {
+        self.inputAgentProvider = .claude
         super.init(coder: coder)
         setupViews()
     }
@@ -135,7 +138,7 @@ class TerminalView: NSView {
         paddedCell.fieldBackgroundColor = nil
         paddedCell.fieldCornerRadius = 0
         paddedCell.placeholderAttributedString = NSAttributedString(
-            string: AgentProvider.current.inputPlaceholder,
+            string: inputAgentProvider.inputPlaceholder,
             attributes: [.font: t.font, .foregroundColor: t.textDim]
         )
         inputField.cell = paddedCell
