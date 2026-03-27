@@ -42,6 +42,7 @@ class LilAgentsController {
         characters.forEach { $0.controller = self }
 
         setupDebugLine()
+        setupDockMouseMonitor()
         startDisplayLink()
 
         if !UserDefaults.standard.bool(forKey: Self.onboardingKey) {
@@ -166,7 +167,7 @@ class LilAgentsController {
         UserDefaults(suiteName: "com.apple.dock")?.bool(forKey: "autohide") ?? false
     }
 
-    /// Estimated dock height from the tile size preference (~tileSize + 10px padding)
+    /// Estimated dock height from the tile size preference (~tileSize + 22px padding)
     private var estimatedDockHeight: CGFloat {
         let tileSize = CGFloat(UserDefaults(suiteName: "com.apple.dock")?.double(forKey: "tilesize") ?? 48)
         return tileSize + 22
@@ -175,6 +176,34 @@ class LilAgentsController {
     /// Smoothed Y for character position when dock auto-hides.
     private var smoothedDockTopY: CGFloat?
     private static let smoothFactor: CGFloat = 0.12
+
+    /// Whether the cursor is currently in the dock trigger zone (bottom 5px of screen).
+    private var mouseInDockZone = false
+
+    /// Event monitors for mouse movement — fires only when the cursor actually moves,
+    /// avoiding 60fps polling of NSEvent.mouseLocation.
+    private var dockMouseMonitor: Any?
+    private var dockLocalMouseMonitor: Any?
+
+    private func setupDockMouseMonitor() {
+        // Global monitor catches mouse moves outside the app's windows.
+        dockMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in
+            self?.updateDockZoneFromMouse()
+        }
+        // Local monitor covers moves over the app's own windows (character windows).
+        dockLocalMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in
+            self?.updateDockZoneFromMouse()
+            return nil // don't consume the event
+        }
+    }
+
+    private func updateDockZoneFromMouse() {
+        guard dockIsAutoHidden, let screen = activeScreen else { return }
+        let mouseLocation = NSEvent.mouseLocation
+        let screenBottom = screen.frame.origin.y
+        let nearBottom = mouseLocation.y - screenBottom < 5
+        mouseInDockZone = nearBottom
+    }
 
     func tick() {
         guard let screen = activeScreen else { return }
@@ -196,14 +225,9 @@ class LilAgentsController {
             dockWidth = screenWidth - margin * 2
 
             if dockIsAutoHidden {
-                // Check if mouse is near the bottom edge of the screen (dock trigger zone)
-                let mouseLocation = NSEvent.mouseLocation
-                let screenBottom = screen.frame.origin.y
-                let mouseNearBottom = mouseLocation.y - screenBottom < 5
-
-                let targetY = mouseNearBottom
-                    ? screenBottom + estimatedDockHeight
-                    : screenBottom
+                let targetY = mouseInDockZone
+                    ? screen.frame.origin.y + estimatedDockHeight
+                    : screen.frame.origin.y
 
                 if let current = smoothedDockTopY {
                     smoothedDockTopY = current + (targetY - current) * Self.smoothFactor
@@ -242,6 +266,12 @@ class LilAgentsController {
     deinit {
         if let displayLink = displayLink {
             CVDisplayLinkStop(displayLink)
+        }
+        if let monitor = dockMouseMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        if let monitor = dockLocalMouseMonitor {
+            NSEvent.removeMonitor(monitor)
         }
     }
 }
