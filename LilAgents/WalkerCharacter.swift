@@ -54,6 +54,10 @@ class WalkerCharacter {
     var themeOverride: PopoverTheme?
     var isAgentBusy: Bool { session?.isBusy ?? false }
     var thinkingBubbleWindow: NSWindow?
+    private(set) var isManuallyVisible = true
+    private var environmentHiddenAt: CFTimeInterval?
+    private var wasPopoverVisibleBeforeEnvironmentHide = false
+    private var wasBubbleVisibleBeforeEnvironmentHide = false
 
     init(videoName: String) {
         self.videoName = videoName
@@ -99,7 +103,7 @@ class WalkerCharacter {
         window.hasShadow = false
         window.level = .statusBar
         window.ignoresMouseEvents = false
-        window.collectionBehavior = [.canJoinAllSpaces, .stationary]
+        window.collectionBehavior = [.moveToActiveSpace, .stationary]
 
         let hostView = CharacterContentView(frame: CGRect(x: 0, y: 0, width: displayWidth, height: displayHeight))
         hostView.character = self
@@ -109,6 +113,66 @@ class WalkerCharacter {
 
         window.contentView = hostView
         window.orderFrontRegardless()
+    }
+
+    // MARK: - Visibility
+
+    func setManuallyVisible(_ visible: Bool) {
+        isManuallyVisible = visible
+        if visible {
+            if environmentHiddenAt == nil {
+                window.orderFrontRegardless()
+            }
+        } else {
+            queuePlayer.pause()
+            window.orderOut(nil)
+            popoverWindow?.orderOut(nil)
+            thinkingBubbleWindow?.orderOut(nil)
+        }
+    }
+
+    func hideForEnvironment() {
+        guard environmentHiddenAt == nil else { return }
+
+        environmentHiddenAt = CACurrentMediaTime()
+        wasPopoverVisibleBeforeEnvironmentHide = popoverWindow?.isVisible ?? false
+        wasBubbleVisibleBeforeEnvironmentHide = thinkingBubbleWindow?.isVisible ?? false
+
+        queuePlayer.pause()
+        window.orderOut(nil)
+        popoverWindow?.orderOut(nil)
+        thinkingBubbleWindow?.orderOut(nil)
+    }
+
+    func showForEnvironmentIfNeeded() {
+        guard let hiddenAt = environmentHiddenAt else { return }
+
+        let hiddenDuration = CACurrentMediaTime() - hiddenAt
+        environmentHiddenAt = nil
+        walkStartTime += hiddenDuration
+        pauseEndTime += hiddenDuration
+        completionBubbleExpiry += hiddenDuration
+        lastPhraseUpdate += hiddenDuration
+
+        guard isManuallyVisible else { return }
+
+        window.orderFrontRegardless()
+        if isWalking {
+            queuePlayer.play()
+        }
+
+        if isIdleForPopover && wasPopoverVisibleBeforeEnvironmentHide {
+            updatePopoverPosition()
+            popoverWindow?.orderFrontRegardless()
+            popoverWindow?.makeKey()
+            if let terminal = terminalView {
+                popoverWindow?.makeFirstResponder(terminal.inputField)
+            }
+        }
+
+        if wasBubbleVisibleBeforeEnvironmentHide {
+            updateThinkingBubble()
+        }
     }
 
     // MARK: - Click Handling & Popover
@@ -306,7 +370,7 @@ class WalkerCharacter {
         win.backgroundColor = .clear
         win.hasShadow = true
         win.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 10)
-        win.collectionBehavior = [.canJoinAllSpaces, .stationary]
+        win.collectionBehavior = [.moveToActiveSpace, .stationary]
         let brightness = t.popoverBg.redComponent * 0.299 + t.popoverBg.greenComponent * 0.587 + t.popoverBg.blueComponent * 0.114
         win.appearance = NSAppearance(named: brightness < 0.5 ? .darkAqua : .aqua)
 
@@ -566,7 +630,7 @@ class WalkerCharacter {
         win.hasShadow = true
         win.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 5)
         win.ignoresMouseEvents = true
-        win.collectionBehavior = [.canJoinAllSpaces, .stationary]
+        win.collectionBehavior = [.moveToActiveSpace, .stationary]
 
         let container = NSView(frame: NSRect(x: 0, y: 0, width: w, height: h))
         container.wantsLayer = true

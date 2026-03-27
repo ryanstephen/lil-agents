@@ -6,6 +6,7 @@ class LilAgentsController {
     var debugWindow: NSWindow?
     var pinnedScreenIndex: Int = -1
     private static let onboardingKey = "hasCompletedOnboarding"
+    private var isHiddenForEnvironment = false
 
     func start() {
         let char1 = WalkerCharacter(videoName: "walk-bruce-01")
@@ -77,7 +78,7 @@ class LilAgentsController {
         win.hasShadow = false
         win.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 10)
         win.ignoresMouseEvents = true
-        win.collectionBehavior = [.canJoinAllSpaces, .stationary]
+        win.collectionBehavior = [.moveToActiveSpace, .stationary]
         win.orderOut(nil)
         debugWindow = win
     }
@@ -127,6 +128,11 @@ class LilAgentsController {
         return (dockX, dockWidth)
     }
 
+    private func dockAutohideEnabled() -> Bool {
+        let dockDefaults = UserDefaults(suiteName: "com.apple.dock")
+        return dockDefaults?.bool(forKey: "autohide") ?? false
+    }
+
     // MARK: - Display Link
 
     private func startDisplayLink() {
@@ -159,29 +165,51 @@ class LilAgentsController {
         return screen.visibleFrame.origin.y > screen.frame.origin.y
     }
 
+    private func shouldShowCharacters(on screen: NSScreen) -> Bool {
+        if screenHasDock(screen) {
+            return true
+        }
+
+        // With dock auto-hide enabled on the active desktop, the dock can still be
+        // present even though visibleFrame starts at the screen origin. In fullscreen
+        // spaces, both the dock and menu bar are absent, so visibleFrame matches frame.
+        let menuBarVisible = screen.visibleFrame.maxY < screen.frame.maxY
+        return dockAutohideEnabled() && screen == NSScreen.main && menuBarVisible
+    }
+
+    @discardableResult
+    private func updateEnvironmentVisibility(for screen: NSScreen) -> Bool {
+        let shouldShow = shouldShowCharacters(on: screen)
+        guard shouldShow != !isHiddenForEnvironment else { return shouldShow }
+
+        isHiddenForEnvironment = !shouldShow
+
+        if shouldShow {
+            characters.forEach { $0.showForEnvironmentIfNeeded() }
+        } else {
+            debugWindow?.orderOut(nil)
+            characters.forEach { $0.hideForEnvironment() }
+        }
+
+        return shouldShow
+    }
+
     func tick() {
         guard let screen = activeScreen else { return }
+        guard updateEnvironmentVisibility(for: screen) else { return }
 
         let screenWidth = screen.frame.width
         let dockX: CGFloat
         let dockWidth: CGFloat
         let dockTopY: CGFloat
 
-        if screenHasDock(screen) {
-            // Dock is on this screen — constrain to dock area
-            (dockX, dockWidth) = getDockIconArea(screenWidth: screenWidth)
-            dockTopY = screen.visibleFrame.origin.y
-        } else {
-            // No dock on this screen — use full screen width with small margin
-            let margin: CGFloat = 40.0
-            dockX = screen.frame.origin.x + margin
-            dockWidth = screenWidth - margin * 2
-            dockTopY = screen.frame.origin.y
-        }
+        // Dock is on this screen — constrain to dock area
+        (dockX, dockWidth) = getDockIconArea(screenWidth: screenWidth)
+        dockTopY = screen.visibleFrame.origin.y
 
         updateDebugLine(dockX: dockX, dockWidth: dockWidth, dockTopY: dockTopY)
 
-        let activeChars = characters.filter { $0.window.isVisible }
+        let activeChars = characters.filter { $0.window.isVisible && $0.isManuallyVisible }
 
         let now = CACurrentMediaTime()
         let anyWalking = activeChars.contains { $0.isWalking }

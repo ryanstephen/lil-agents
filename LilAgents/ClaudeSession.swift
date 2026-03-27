@@ -6,6 +6,8 @@ class ClaudeSession: AgentSession {
     private var outputPipe: Pipe?
     private var errorPipe: Pipe?
     private var lineBuffer = ""
+    private var currentResponseText = ""
+    private var pendingMessages: [String] = []
     private(set) var isRunning = false
     private(set) var isBusy = false
     private static var binaryPath: String?
@@ -101,6 +103,11 @@ class ClaudeSession: AgentSession {
             outputPipe = outPipe
             errorPipe = errPipe
             isRunning = true
+            let pending = pendingMessages
+            pendingMessages = []
+            for msg in pending {
+                writeMessage(msg, to: inPipe)
+            }
         } catch {
             let msg = "Failed to launch Claude CLI.\n\n\(AgentProvider.claude.installInstructions)\n\nError: \(error.localizedDescription)"
             onError?(msg)
@@ -109,8 +116,16 @@ class ClaudeSession: AgentSession {
     }
 
     func send(message: String) {
-        guard isRunning, let pipe = inputPipe else { return }
+        guard isRunning, let pipe = inputPipe else {
+            pendingMessages.append(message)
+            return
+        }
+        writeMessage(message, to: pipe)
+    }
+
+    private func writeMessage(_ message: String, to pipe: Pipe) {
         isBusy = true
+        currentResponseText = ""
         history.append(AgentMessage(role: .user, text: message))
 
         let payload: [String: Any] = [
@@ -129,6 +144,7 @@ class ClaudeSession: AgentSession {
     func terminate() {
         process?.terminate()
         isRunning = false
+        pendingMessages.removeAll()
     }
 
     // MARK: - NDJSON Parsing
@@ -163,6 +179,7 @@ class ClaudeSession: AgentSession {
                 for block in content {
                     let blockType = block["type"] as? String ?? ""
                     if blockType == "text", let text = block["text"] as? String {
+                        currentResponseText += text
                         onText?(text)
                     } else if blockType == "tool_use" {
                         let toolName = block["name"] as? String ?? "Tool"
@@ -205,9 +222,18 @@ class ClaudeSession: AgentSession {
 
         case "result":
             isBusy = false
+            let finalText: String
             if let result = json["result"] as? String, !result.isEmpty {
-                history.append(AgentMessage(role: .assistant, text: result))
+                finalText = result
+            } else if !currentResponseText.isEmpty {
+                finalText = currentResponseText
+            } else {
+                finalText = ""
             }
+            if !finalText.isEmpty {
+                history.append(AgentMessage(role: .assistant, text: finalText))
+            }
+            currentResponseText = ""
             onTurnComplete?()
 
         default:

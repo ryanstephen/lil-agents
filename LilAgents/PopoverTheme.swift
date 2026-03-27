@@ -150,7 +150,21 @@ struct PopoverTheme {
     )
 
     static let allThemes: [PopoverTheme] = [.playful, .teenageEngineering, .wii, .iPod]
-    static var current: PopoverTheme = .playful
+
+    private static let themeKey = "selectedThemeName"
+
+    static var current: PopoverTheme {
+        get {
+            if let saved = UserDefaults.standard.string(forKey: themeKey),
+               let match = allThemes.first(where: { $0.name == saved }) {
+                return match
+            }
+            return .playful
+        }
+        set {
+            UserDefaults.standard.set(newValue.name, forKey: themeKey)
+        }
+    }
     static var customFontName: String? = ".AppleSystemUIFontRounded"
     static var customFontSize: CGFloat = 13
 

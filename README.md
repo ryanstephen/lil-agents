@@ -8,6 +8,8 @@ Tiny AI companions that live on your macOS dock.
 
 Supports **Claude Code**, **OpenAI Codex**, and **GitHub Copilot** CLIs — switch between them from the menubar.
 
+**[Download for macOS](https://lilagents.xyz)** · [Website](https://lilagents.xyz)
+
 ## features
 
 - Animated characters rendered from transparent HEVC video
@@ -23,7 +25,7 @@ Supports **Claude Code**, **OpenAI Codex**, and **GitHub Copilot** CLIs — swit
 
 - macOS Sonoma (14.0+)
 - At least one supported CLI installed:
-  - [Claude Code](https://claude.ai/download)
+  - [Claude Code](https://claude.ai/download) — `curl -fsSL https://claude.ai/install.sh | sh`
   - [OpenAI Codex](https://github.com/openai/codex) — `npm install -g @openai/codex`
   - [GitHub Copilot](https://github.com/github/copilot-cli) — `brew install copilot-cli`
 
