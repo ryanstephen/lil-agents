@@ -7,7 +7,6 @@ class CodexSession: AgentSession {
     private var lineBuffer = ""
     private(set) var isRunning = false
     private(set) var isBusy = false
-    private var isFirstTurn = true
     private static var binaryPath: String?
 
     var onText: ((String) -> Void)?
@@ -54,14 +53,13 @@ class CodexSession: AgentSession {
         history.append(AgentMessage(role: .user, text: message))
         lineBuffer = ""
 
+        // Current Codex CLI: only `codex exec [OPTIONS] <PROMPT>` (resume/--last removed).
+        let prompt = Self.execPrompt(priorMessages: history.dropLast(), latestUserMessage: message)
+
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: binaryPath)
 
-        if isFirstTurn {
-            proc.arguments = ["exec", "--json", "--full-auto", "--skip-git-repo-check", message]
-        } else {
-            proc.arguments = ["exec", "resume", "--last", "--json", "--full-auto", "--skip-git-repo-check", message]
-        }
+        proc.arguments = ["exec", "--json", "--full-auto", "--skip-git-repo-check", prompt]
 
         proc.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
         proc.environment = ShellEnvironment.processEnvironment(extraPaths: [
@@ -114,7 +112,6 @@ class CodexSession: AgentSession {
             process = proc
             outputPipe = outPipe
             errorPipe = errPipe
-            isFirstTurn = false
         } catch {
             isBusy = false
             let msg = "Failed to launch Codex CLI: \(error.localizedDescription)"
@@ -130,6 +127,36 @@ class CodexSession: AgentSession {
         process = nil
         isRunning = false
         isBusy = false
+    }
+
+    // MARK: - Prompt (multi-turn without codex exec resume)
+
+    private static func execPrompt(priorMessages: ArraySlice<AgentMessage>, latestUserMessage: String) -> String {
+        guard !priorMessages.isEmpty else { return latestUserMessage }
+        var parts: [String] = []
+        for m in priorMessages {
+            switch m.role {
+            case .user:
+                parts.append("User: \(m.text)")
+            case .assistant:
+                parts.append("Assistant: \(m.text)")
+            case .toolUse:
+                parts.append("Tool: \(m.text)")
+            case .toolResult:
+                parts.append("Tool result: \(m.text)")
+            case .error:
+                parts.append("Error: \(m.text)")
+            }
+        }
+        return """
+        Conversation so far (for context; respond only to the follow-up):
+
+        \(parts.joined(separator: "\n\n"))
+
+        ---
+
+        User (follow-up): \(latestUserMessage)
+        """
     }
 
     // MARK: - JSONL Parsing
