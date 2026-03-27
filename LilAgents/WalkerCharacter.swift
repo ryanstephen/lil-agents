@@ -59,6 +59,15 @@ class WalkerCharacter {
     private var wasPopoverVisibleBeforeEnvironmentHide = false
     private var wasBubbleVisibleBeforeEnvironmentHide = false
 
+    // Dock-like idle shrink: smaller when unused; click snaps back to full size (like dock magnification).
+    private static let dockCompactScale: CGFloat = 0.56
+    private var dockMagnification: CGFloat = 1.0
+    private var dockMagnificationTarget: CGFloat = 1.0
+    private var popoverDismissedAt: CFTimeInterval?
+
+    private var effectiveDisplayHeight: CGFloat { displayHeight * dockMagnification }
+    private var effectiveDisplayWidth: CGFloat { displayWidth * dockMagnification }
+
     init(videoName: String) {
         self.videoName = videoName
     }
@@ -78,7 +87,7 @@ class WalkerCharacter {
         playerLayer = AVPlayerLayer(player: queuePlayer)
         playerLayer.videoGravity = .resizeAspect
         playerLayer.backgroundColor = NSColor.clear.cgColor
-        playerLayer.frame = CGRect(x: 0, y: 0, width: displayWidth, height: displayHeight)
+        playerLayer.frame = CGRect(x: 0, y: 0, width: effectiveDisplayWidth, height: effectiveDisplayHeight)
 
         let screen = NSScreen.main!
         let dockTopY = screen.visibleFrame.origin.y
@@ -104,8 +113,10 @@ class WalkerCharacter {
         hostView.wantsLayer = true
         hostView.layer?.backgroundColor = NSColor.clear.cgColor
         hostView.layer?.addSublayer(playerLayer)
+        hostView.autoresizingMask = [.width, .height]
 
         window.contentView = hostView
+        popoverDismissedAt = CACurrentMediaTime()
         window.orderFrontRegardless()
     }
 
@@ -169,9 +180,78 @@ class WalkerCharacter {
         }
     }
 
+    // MARK: - Dock magnification
+
+    private func refreshDockMagnificationTarget(now: CFTimeInterval) {
+        if isOnboarding || isIdleForPopover {
+            dockMagnificationTarget = 1.0
+            return
+        }
+        if !DockMagnificationSettings.isEnabled {
+            dockMagnificationTarget = 1.0
+            return
+        }
+        if let t0 = popoverDismissedAt, now - t0 >= DockMagnificationSettings.idleSeconds {
+            dockMagnificationTarget = Self.dockCompactScale
+        } else {
+            dockMagnificationTarget = 1.0
+        }
+    }
+
+    private func tickDockMagnification() {
+        let now = CACurrentMediaTime()
+        refreshDockMagnificationTarget(now: now)
+        let delta = dockMagnificationTarget - dockMagnification
+        if abs(delta) < 0.003 {
+            dockMagnification = dockMagnificationTarget
+            return
+        }
+        let k: CGFloat = dockMagnificationTarget < dockMagnification ? 0.12 : 0.28
+        dockMagnification += delta * k
+    }
+
+    /// Horizontal center stays aligned with the full-size walk path; bottom stays anchored above the dock.
+    private func layoutWindowForDock(dockX: CGFloat, dockWidth: CGFloat, dockTopY: CGFloat) {
+        let w = effectiveDisplayWidth
+        let h = effectiveDisplayHeight
+        let travelFull = max(dockWidth - displayWidth, 0)
+        let leftFull = dockX + travelFull * positionProgress + currentFlipCompensation
+        let centerX = leftFull + displayWidth / 2
+        let x = centerX - w / 2
+        let fullPad = displayHeight * 0.15
+        let y = dockTopY - fullPad + yOffset
+
+        var frame = window.frame
+        frame.origin = NSPoint(x: x, y: y)
+        frame.size = NSSize(width: w, height: h)
+        window.setFrame(frame, display: true)
+
+        if let host = window.contentView {
+            host.frame = NSRect(x: 0, y: 0, width: w, height: h)
+        }
+        playerLayer.frame = CGRect(x: 0, y: 0, width: w, height: h)
+    }
+
+    private func snapDockMagnificationToFull() {
+        dockMagnification = 1.0
+        dockMagnificationTarget = 1.0
+        popoverDismissedAt = nil
+    }
+
+    /// Call when menu toggles idle shrink off so windows return to full size immediately.
+    func applyDockMagnificationSettingsChanged() {
+        if !DockMagnificationSettings.isEnabled {
+            snapDockMagnificationToFull()
+        }
+    }
+
+
     // MARK: - Click Handling & Popover
 
     func handleClick() {
+        if DockMagnificationSettings.isEnabled, dockMagnification < 0.98 {
+            snapDockMagnificationToFull()
+        }
         if isOnboarding {
             openOnboardingPopover()
             return
@@ -236,10 +316,12 @@ class WalkerCharacter {
         isPaused = true
         pauseEndTime = CACurrentMediaTime() + Double.random(in: 1.0...3.0)
         queuePlayer.seek(to: .zero)
+        popoverDismissedAt = CACurrentMediaTime()
         controller?.completeOnboarding()
     }
 
     func openPopover() {
+        popoverDismissedAt = nil
         // Close any other open popover
         if let siblings = controller?.characters {
             for sibling in siblings where sibling !== self && sibling.isIdleForPopover {
@@ -303,6 +385,8 @@ class WalkerCharacter {
 
     func closePopover() {
         guard isIdleForPopover else { return }
+
+        popoverDismissedAt = CACurrentMediaTime()
 
         popoverWindow?.orderOut(nil)
         removeEventMonitors()
@@ -773,13 +857,11 @@ class WalkerCharacter {
     // MARK: - Frame Update
 
     func update(dockX: CGFloat, dockWidth: CGFloat, dockTopY: CGFloat) {
+        tickDockMagnification()
         currentTravelDistance = max(dockWidth - displayWidth, 0)
+
         if isIdleForPopover {
-            let travelDistance = currentTravelDistance
-            let x = dockX + travelDistance * positionProgress + currentFlipCompensation
-            let bottomPadding = displayHeight * 0.15
-            let y = dockTopY - bottomPadding + yOffset
-            window.setFrameOrigin(NSPoint(x: x, y: y))
+            layoutWindowForDock(dockX: dockX, dockWidth: dockWidth, dockTopY: dockTopY)
             updatePopoverPosition()
             updateThinkingBubble()
             return
@@ -791,11 +873,7 @@ class WalkerCharacter {
             if now >= pauseEndTime {
                 startWalk()
             } else {
-                let travelDistance = max(dockWidth - displayWidth, 0)
-                let x = dockX + travelDistance * positionProgress + currentFlipCompensation
-                let bottomPadding = displayHeight * 0.15
-                let y = dockTopY - bottomPadding + yOffset
-                window.setFrameOrigin(NSPoint(x: x, y: y))
+                layoutWindowForDock(dockX: dockX, dockWidth: dockWidth, dockTopY: dockTopY)
                 return
             }
         }
@@ -820,10 +898,7 @@ class WalkerCharacter {
                 return
             }
 
-            let x = dockX + travelDistance * positionProgress + currentFlipCompensation
-            let bottomPadding = displayHeight * 0.15
-            let y = dockTopY - bottomPadding + yOffset
-            window.setFrameOrigin(NSPoint(x: x, y: y))
+            layoutWindowForDock(dockX: dockX, dockWidth: dockWidth, dockTopY: dockTopY)
         }
 
         updateThinkingBubble()

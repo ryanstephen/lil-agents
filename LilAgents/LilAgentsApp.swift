@@ -51,6 +51,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         soundItem.state = .on
         menu.addItem(soundItem)
 
+        let shrinkWhenIdleItem = NSMenuItem(title: "Shrink when idle", action: #selector(toggleDockShrinkWhenIdle(_:)), keyEquivalent: "")
+        shrinkWhenIdleItem.state = DockMagnificationSettings.isEnabled ? .on : .off
+        menu.addItem(shrinkWhenIdleItem)
+
+        let shrinkAfterItem = NSMenuItem(title: "Shrink after", action: nil, keyEquivalent: "")
+        let shrinkAfterMenu = NSMenu()
+        for sec in DockMagnificationSettings.idlePresetsSeconds {
+            let it = NSMenuItem(title: "\(sec) seconds", action: #selector(setDockShrinkIdleDelay(_:)), keyEquivalent: "")
+            it.tag = sec
+            shrinkAfterMenu.addItem(it)
+        }
+        shrinkAfterItem.submenu = shrinkAfterMenu
+        menu.addItem(shrinkAfterItem)
+
         // Provider submenu
         let providerItem = NSMenuItem(title: "Provider", action: nil, keyEquivalent: "")
         let providerMenu = NSMenu()
@@ -106,6 +120,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(quitItem)
 
         statusItem?.menu = menu
+        syncDockShrinkMenuItems()
+    }
+
+    private func syncDockShrinkMenuItems() {
+        guard let menu = statusItem?.menu else { return }
+        menu.item(withTitle: "Shrink when idle")?.state = DockMagnificationSettings.isEnabled ? .on : .off
+        guard let sm = menu.item(withTitle: "Shrink after")?.submenu else { return }
+        let cur = Int(DockMagnificationSettings.idleSeconds)
+        let enabled = DockMagnificationSettings.isEnabled
+        for item in sm.items {
+            item.state = item.tag == cur ? .on : .off
+            item.isEnabled = enabled
+        }
     }
 
     // MARK: - Menu Actions
@@ -219,6 +246,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func toggleSounds(_ sender: NSMenuItem) {
         WalkerCharacter.soundsEnabled.toggle()
         sender.state = WalkerCharacter.soundsEnabled ? .on : .off
+    }
+
+    @objc func toggleDockShrinkWhenIdle(_ sender: NSMenuItem) {
+        DockMagnificationSettings.isEnabled.toggle()
+        sender.state = DockMagnificationSettings.isEnabled ? .on : .off
+        syncDockShrinkMenuItems()
+        controller?.characters.forEach { $0.applyDockMagnificationSettingsChanged() }
+    }
+
+    @objc func setDockShrinkIdleDelay(_ sender: NSMenuItem) {
+        let sec = sender.tag
+        guard sec > 0 else { return }
+        DockMagnificationSettings.idleSeconds = TimeInterval(sec)
+        if let sm = sender.menu {
+            for item in sm.items {
+                item.state = item.tag == sec ? .on : .off
+            }
+        }
+        syncDockShrinkMenuItems()
     }
 
     @objc func quitApp() {
