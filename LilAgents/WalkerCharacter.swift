@@ -125,6 +125,13 @@ class WalkerCharacter {
         }
     }
 
+    func showContextMenu(with event: NSEvent) {
+        guard let appDelegate = NSApp.delegate as? AppDelegate,
+              let view = window?.contentView else { return }
+        let menu = appDelegate.makeContextMenu()
+        NSMenu.popUpContextMenu(menu, with: event, for: view)
+    }
+
     private func openOnboardingPopover() {
         showingCompletion = false
         hideBubble()

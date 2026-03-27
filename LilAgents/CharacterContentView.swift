@@ -57,4 +57,8 @@ class CharacterContentView: NSView {
     override func mouseDown(with event: NSEvent) {
         character?.handleClick()
     }
+
+    override func rightMouseDown(with event: NSEvent) {
+        character?.showContextMenu(with: event)
+    }
 }
