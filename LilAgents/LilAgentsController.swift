@@ -8,6 +8,42 @@ class LilAgentsController {
     private static let onboardingKey = "hasCompletedOnboarding"
     private var isHiddenForEnvironment = false
 
+    // MARK: - Auto-hide Dock Dodging
+
+    /// Whether the cursor is currently in the dock trigger zone (bottom 5px of screen).
+    private var mouseInDockZone = false
+
+    /// Smoothed Y offset for character position when dock auto-hides.
+    private var smoothedDockOffset: CGFloat = 0
+    private static let dockSmoothFactor: CGFloat = 0.12
+
+    /// Estimated dock height from the tile size preference (~tileSize + 22px padding)
+    private var estimatedDockHeight: CGFloat {
+        let tileSize = CGFloat(UserDefaults(suiteName: "com.apple.dock")?.double(forKey: "tilesize") ?? 48)
+        return tileSize + 22
+    }
+
+    /// Event monitors for mouse movement — fires only when the cursor actually moves.
+    private var dockMouseMonitor: Any?
+    private var dockLocalMouseMonitor: Any?
+
+    private func setupDockMouseMonitor() {
+        dockMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in
+            self?.updateDockZoneFromMouse()
+        }
+        dockLocalMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in
+            self?.updateDockZoneFromMouse()
+            return nil
+        }
+    }
+
+    private func updateDockZoneFromMouse() {
+        guard dockAutohideEnabled(), let screen = activeScreen else { return }
+        let mouseLocation = NSEvent.mouseLocation
+        let screenBottom = screen.frame.origin.y
+        mouseInDockZone = mouseLocation.y - screenBottom < 5
+    }
+
     func start() {
         let char1 = WalkerCharacter(videoName: "walk-bruce-01")
         char1.accelStart = 3.0
@@ -43,6 +79,7 @@ class LilAgentsController {
         characters.forEach { $0.controller = self }
 
         setupDebugLine()
+        setupDockMouseMonitor()
         startDisplayLink()
 
         if !UserDefaults.standard.bool(forKey: Self.onboardingKey) {
@@ -201,11 +238,21 @@ class LilAgentsController {
         let screenWidth = screen.frame.width
         let dockX: CGFloat
         let dockWidth: CGFloat
-        let dockTopY: CGFloat
+        var dockTopY: CGFloat
 
         // Dock is on this screen — constrain to dock area
         (dockX, dockWidth) = getDockIconArea(screenWidth: screenWidth)
         dockTopY = screen.visibleFrame.origin.y
+
+        // When dock auto-hides, smoothly move characters up when cursor
+        // enters the dock trigger zone so they don't overlap the dock.
+        if !screenHasDock(screen) && dockAutohideEnabled() {
+            let targetOffset = mouseInDockZone ? estimatedDockHeight : 0
+            smoothedDockOffset += (targetOffset - smoothedDockOffset) * Self.dockSmoothFactor
+            dockTopY += smoothedDockOffset
+        } else {
+            smoothedDockOffset = 0
+        }
 
         updateDebugLine(dockX: dockX, dockWidth: dockWidth, dockTopY: dockTopY)
 
@@ -232,6 +279,12 @@ class LilAgentsController {
     deinit {
         if let displayLink = displayLink {
             CVDisplayLinkStop(displayLink)
+        }
+        if let monitor = dockMouseMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        if let monitor = dockLocalMouseMonitor {
+            NSEvent.removeMonitor(monitor)
         }
     }
 }
