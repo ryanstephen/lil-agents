@@ -50,6 +50,8 @@ class WalkerCharacter {
     var clickOutsideMonitor: Any?
     var escapeKeyMonitor: Any?
     var currentStreamingText = ""
+    private var pendingSessions: [LiveSession.DiscoveredSession] = []
+    private var sessionPickerView: NSView?
     weak var controller: LilAgentsController?
     var themeOverride: PopoverTheme?
     var isAgentBusy: Bool { session?.isBusy ?? false }
@@ -258,10 +260,22 @@ class WalkerCharacter {
         hideBubble()
 
         if session == nil {
-            let newSession = AgentProvider.current.createSession()
-            session = newSession
-            wireSession(newSession)
-            newSession.start()
+            if AgentProvider.current == .live, let chosen = AgentProvider.selectedLiveSession {
+                let liveSession = AgentProvider.live.createLiveSession(
+                    sessionId: chosen.id,
+                    projectName: chosen.projectName
+                )
+                session = liveSession
+                wireSession(liveSession, providerName: "Live: \(chosen.projectName)")
+                liveSession.start()
+            } else if AgentProvider.current.requiresSessionPicker {
+                showSessionPicker()
+            } else {
+                let newSession = AgentProvider.current.createSession()
+                session = newSession
+                wireSession(newSession)
+                newSession.start()
+            }
         }
 
         if popoverWindow == nil {
@@ -402,7 +416,12 @@ class WalkerCharacter {
         terminal.themeOverride = themeOverride
         terminal.autoresizingMask = [.width, .height]
         terminal.onSendMessage = { [weak self] message in
-            self?.session?.send(message: message)
+            guard let self = self else { return }
+            if !self.pendingSessions.isEmpty {
+                self.handleSessionPick(message)
+            } else {
+                self.session?.send(message: message)
+            }
         }
         terminal.onClearRequested = { [weak self] in
             self?.session?.history.removeAll()
@@ -444,6 +463,158 @@ class WalkerCharacter {
             self?.terminalView?.endStreaming()
             self?.terminalView?.appendError("\(providerName) session ended.")
         }
+    }
+
+    // MARK: - Live Session Picker
+
+    private func showSessionPicker() {
+        let sessions = LiveSession.discoverSessions()
+        pendingSessions = sessions
+
+        if popoverWindow == nil {
+            createPopoverWindow()
+        }
+
+        guard let container = popoverWindow?.contentView else { return }
+        let t = resolvedTheme
+
+        // Remove old picker if present
+        sessionPickerView?.removeFromSuperview()
+
+        let pickerHeight: CGFloat = 200
+        let popoverWidth = container.bounds.width
+        let picker = NSView(frame: NSRect(x: 0, y: 0, width: popoverWidth, height: pickerHeight))
+        picker.wantsLayer = true
+        picker.autoresizingMask = [.width]
+
+        if sessions.isEmpty {
+            let label = NSTextField(wrappingLabelWithString: "no active sessions found.\n\nthe bridge hook is installed — start or use a Claude Code session and it will appear here.")
+            label.font = t.font
+            label.textColor = t.textDim
+            label.frame = NSRect(x: 20, y: pickerHeight - 90, width: popoverWidth - 40, height: 80)
+            label.isEditable = false
+            label.isBordered = false
+            label.drawsBackground = false
+            picker.addSubview(label)
+
+            let refreshBtn = NSButton(title: "Refresh", target: self, action: #selector(refreshSessionPicker))
+            refreshBtn.bezelStyle = .rounded
+            refreshBtn.frame = NSRect(x: popoverWidth / 2 - 40, y: pickerHeight - 130, width: 80, height: 28)
+            refreshBtn.contentTintColor = t.accentColor
+            picker.addSubview(refreshBtn)
+        } else {
+            let title = NSTextField(labelWithString: "connect to a session:")
+            title.font = t.fontBold
+            title.textColor = t.accentColor
+            title.frame = NSRect(x: 20, y: pickerHeight - 30, width: popoverWidth - 40, height: 20)
+            picker.addSubview(title)
+
+            var yPos = pickerHeight - 60
+            for (i, s) in sessions.enumerated() {
+                let btn = NSButton(frame: NSRect(x: 16, y: yPos, width: popoverWidth - 32, height: 44))
+                btn.bezelStyle = .rounded
+                btn.title = ""
+                btn.tag = i
+                btn.target = self
+                btn.action = #selector(sessionButtonClicked(_:))
+                btn.wantsLayer = true
+                btn.layer?.cornerRadius = 6
+                picker.addSubview(btn)
+
+                let nameLabel = NSTextField(labelWithString: s.projectName)
+                nameLabel.font = t.fontBold
+                nameLabel.textColor = t.textPrimary
+                nameLabel.frame = NSRect(x: 28, y: yPos + 22, width: popoverWidth - 80, height: 16)
+                nameLabel.isEditable = false
+                nameLabel.isBordered = false
+                nameLabel.drawsBackground = false
+                picker.addSubview(nameLabel)
+
+                let detailLabel = NSTextField(labelWithString: "\(s.cwd)  \u{2022}  \(s.age)")
+                detailLabel.font = NSFont.systemFont(ofSize: t.font.pointSize - 1)
+                detailLabel.textColor = t.textDim
+                detailLabel.frame = NSRect(x: 28, y: yPos + 4, width: popoverWidth - 80, height: 14)
+                detailLabel.isEditable = false
+                detailLabel.isBordered = false
+                detailLabel.drawsBackground = false
+                detailLabel.lineBreakMode = .byTruncatingMiddle
+                picker.addSubview(detailLabel)
+
+                yPos -= 52
+            }
+
+            let refreshBtn = NSButton(title: "Refresh", target: self, action: #selector(refreshSessionPicker))
+            refreshBtn.bezelStyle = .rounded
+            refreshBtn.frame = NSRect(x: popoverWidth / 2 - 40, y: max(yPos, 8), width: 80, height: 28)
+            refreshBtn.contentTintColor = t.accentColor
+            picker.addSubview(refreshBtn)
+        }
+
+        // Place picker over the terminal area (below title bar)
+        let terminalFrame = terminalView?.frame ?? NSRect(x: 0, y: 0, width: popoverWidth, height: pickerHeight)
+        picker.frame = terminalFrame
+        container.addSubview(picker, positioned: .above, relativeTo: terminalView)
+        sessionPickerView = picker
+
+        // Hide input while picking
+        terminalView?.inputField.isHidden = true
+    }
+
+    @objc private func refreshSessionPicker() {
+        showSessionPicker()
+    }
+
+    @objc private func sessionButtonClicked(_ sender: NSButton) {
+        let idx = sender.tag
+        guard idx >= 0, idx < pendingSessions.count else { return }
+        connectToSession(pendingSessions[idx])
+    }
+
+    private func connectToSession(_ chosen: LiveSession.DiscoveredSession) {
+        pendingSessions = []
+        sessionPickerView?.removeFromSuperview()
+        sessionPickerView = nil
+        terminalView?.inputField.isHidden = false
+
+        let liveSession = AgentProvider.live.createLiveSession(
+            sessionId: chosen.id,
+            projectName: chosen.projectName
+        )
+        session = liveSession
+        wireSession(liveSession, providerName: "Live: \(chosen.projectName)")
+        liveSession.start()
+
+        terminalView?.textView.textStorage?.setAttributedString(NSAttributedString(string: ""))
+        terminalView?.appendStreamingText("connected to \(chosen.projectName)\n")
+        terminalView?.appendStreamingText("watching session \(chosen.id.prefix(8))...\n\n")
+        terminalView?.endStreaming()
+
+        if !liveSession.history.isEmpty {
+            terminalView?.replayHistory(liveSession.history)
+        }
+
+        if let terminal = terminalView {
+            popoverWindow?.makeFirstResponder(terminal.inputField)
+        }
+    }
+
+    private func handleSessionPick(_ message: String) {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmed.lowercased() == "/sessions" {
+            showSessionPicker()
+            return
+        }
+
+        // If picker is showing and user types a number, handle it
+        guard let num = Int(trimmed), num >= 1, num <= pendingSessions.count else {
+            if !pendingSessions.isEmpty {
+                showSessionPicker()
+            }
+            return
+        }
+
+        connectToSession(pendingSessions[num - 1])
     }
 
     @objc func copyLastResponseFromButton() {

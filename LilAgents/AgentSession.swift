@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Provider
 
 enum AgentProvider: String, CaseIterable {
-    case claude, codex, copilot, gemini
+    case claude, codex, copilot, gemini, live
 
     private static let defaultsKey = "selectedProvider"
 
@@ -23,11 +23,15 @@ enum AgentProvider: String, CaseIterable {
         case .codex:   return "Codex"
         case .copilot: return "Copilot"
         case .gemini:  return "Gemini"
+        case .live:    return "Live Session"
         }
     }
 
     var inputPlaceholder: String {
-        "Ask \(displayName)..."
+        switch self {
+        case .live: return "Send a note to the session..."
+        default:    return "Ask \(displayName)..."
+        }
     }
 
     /// Returns provider name styled per theme format.
@@ -49,8 +53,18 @@ enum AgentProvider: String, CaseIterable {
             return "To install, run this in Terminal:\n  brew install copilot-cli\n\nOr: npm install -g @github/copilot-cli"
         case .gemini:
             return "To install, run this in Terminal:\n  npm install -g @google/gemini-cli\n\nThen authenticate:\n  gemini auth"
+        case .live:
+            return "To use Live Session, install the bridge hook.\nSee: hooks/lil-agents-bridge.mjs in the project."
         }
     }
+
+    /// Whether this provider requires session selection before use.
+    var requiresSessionPicker: Bool {
+        self == .live && Self.selectedLiveSession == nil
+    }
+
+    /// The currently selected live session (set via menu bar).
+    static var selectedLiveSession: LiveSession.DiscoveredSession?
 
     func createSession() -> any AgentSession {
         switch self {
@@ -58,7 +72,12 @@ enum AgentProvider: String, CaseIterable {
         case .codex:   return CodexSession()
         case .copilot: return CopilotSession()
         case .gemini:  return GeminiSession()
+        case .live:    fatalError("Use createLiveSession(sessionId:projectName:) instead")
         }
+    }
+
+    func createLiveSession(sessionId: String, projectName: String) -> LiveSession {
+        LiveSession(sessionId: sessionId, projectName: projectName)
     }
 }
 
