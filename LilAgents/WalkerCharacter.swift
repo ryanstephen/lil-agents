@@ -39,6 +39,13 @@ class WalkerCharacter {
     var walkStartPixel: CGFloat = 0.0
     var walkEndPixel: CGFloat = 0.0
 
+    // Jump state
+    private var isJumping = false
+    private var jumpStartTime: CFTimeInterval = 0
+    private let jumpDuration: CFTimeInterval = 0.45
+    private let jumpHeight: CGFloat = 35
+    private var nextJumpTime: CFTimeInterval = 0
+
     // Onboarding
     var isOnboarding = false
 
@@ -882,10 +889,8 @@ class WalkerCharacter {
         }
 
         walkStartPos = positionProgress
-        // Walk a fixed pixel distance (~200-325px) regardless of screen width.
-        let referenceWidth: CGFloat = 500.0
-        let walkPixels = CGFloat.random(in: walkAmountRange) * referenceWidth
-        let walkAmount = currentTravelDistance > 0 ? walkPixels / currentTravelDistance : 0.3
+        // Walk a fraction of the actual travel distance (full screen width)
+        let walkAmount = CGFloat.random(in: walkAmountRange)
         if goingRight {
             walkEndPos = min(walkStartPos + walkAmount, 1.0)
         } else {
@@ -895,7 +900,7 @@ class WalkerCharacter {
         walkStartPixel = walkStartPos * currentTravelDistance
         walkEndPixel = walkEndPos * currentTravelDistance
 
-        let minSeparation: CGFloat = 0.12
+        let minSeparation: CGFloat = 0.05
         if let siblings = controller?.characters {
             for sibling in siblings where sibling !== self {
                 let sibPos = sibling.positionProgress
@@ -909,6 +914,9 @@ class WalkerCharacter {
             }
         }
 
+        // Schedule a possible jump during this walk
+        nextJumpTime = CACurrentMediaTime() + Double.random(in: 1.0...3.0)
+
         updateFlip()
         queuePlayer.seek(to: .zero)
         queuePlayer.play()
@@ -917,10 +925,33 @@ class WalkerCharacter {
     func enterPause() {
         isWalking = false
         isPaused = true
+        isJumping = false
         queuePlayer.pause()
         queuePlayer.seek(to: .zero)
-        let delay = Double.random(in: 5.0...12.0)
+        let delay = Double.random(in: 3.0...7.0)
         pauseEndTime = CACurrentMediaTime() + delay
+    }
+
+    /// Returns the vertical offset for a jump (parabolic arc), or 0 if not jumping.
+    private func jumpOffset(at now: CFTimeInterval) -> CGFloat {
+        guard isJumping else { return 0 }
+        let t = (now - jumpStartTime) / jumpDuration
+        if t >= 1.0 {
+            isJumping = false
+            return 0
+        }
+        // Parabola: peaks at t=0.5, returns to 0 at t=1
+        return jumpHeight * 4.0 * CGFloat(t) * CGFloat(1.0 - t)
+    }
+
+    private func maybeStartJump(at now: CFTimeInterval) {
+        guard isWalking, !isJumping, now >= nextJumpTime else { return }
+        // ~15% chance to jump each time we check
+        if Double.random(in: 0...1) < 0.15 {
+            isJumping = true
+            jumpStartTime = now
+        }
+        nextJumpTime = now + Double.random(in: 2.0...5.0)
     }
 
     func updateFlip() {
@@ -1014,9 +1045,12 @@ class WalkerCharacter {
                 return
             }
 
+            // Maybe start a jump while walking
+            maybeStartJump(at: now)
+
             let x = dockX + travelDistance * positionProgress + currentFlipCompensation
             let bottomPadding = displayHeight * 0.15
-            let y = dockTopY - bottomPadding + yOffset
+            let y = dockTopY - bottomPadding + yOffset + jumpOffset(at: now)
             window.setFrameOrigin(NSPoint(x: x, y: y))
         }
 
