@@ -121,9 +121,18 @@ Injected as additionalContext into your Claude session
 
 Each character can connect to a different session — put Bruce on one project and Jazz on another.
 
-## building
+## install from source
 
-Open `lil-agents.xcodeproj` in Xcode and hit run.
+```bash
+git clone https://github.com/Orbasker/lil-agents.git
+cd lil-agents
+git checkout feat/live-session-bridge
+xcodebuild -scheme LilAgents -configuration Release build
+cp -R ~/Library/Developer/Xcode/DerivedData/lil-agents-*/Build/Products/Release/lil\ agents.app /Applications/
+open "/Applications/lil agents.app"
+```
+
+Requires Xcode (or Xcode Command Line Tools with full Xcode installed). On first launch you may need to right-click > Open since the app is not notarized.
 
 ## privacy
 
