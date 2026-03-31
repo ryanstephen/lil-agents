@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Provider
 
 enum AgentProvider: String, CaseIterable {
-    case claude, codex, copilot, gemini
+    case claude, codex, copilot, gemini, stakpak
 
     private static let defaultsKey = "selectedProvider"
 
@@ -19,10 +19,11 @@ enum AgentProvider: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .claude:  return "Claude"
-        case .codex:   return "Codex"
-        case .copilot: return "Copilot"
-        case .gemini:  return "Gemini"
+        case .claude:   return "Claude"
+        case .codex:    return "Codex"
+        case .copilot:  return "Copilot"
+        case .gemini:   return "Gemini"
+        case .stakpak:  return "Stakpak"
         }
     }
 
@@ -49,15 +50,18 @@ enum AgentProvider: String, CaseIterable {
             return "To install, run this in Terminal:\n  brew install copilot-cli\n\nOr: npm install -g @github/copilot-cli"
         case .gemini:
             return "To install, run this in Terminal:\n  npm install -g @google/gemini-cli\n\nThen authenticate:\n  gemini auth"
+        case .stakpak:
+            return "To install, run this in Terminal:\n  curl -sSL https://stakpak.dev/install.sh | sh\n\nThen authenticate:\n  stakpak auth login"
         }
     }
 
     func createSession() -> any AgentSession {
         switch self {
-        case .claude:  return ClaudeSession()
-        case .codex:   return CodexSession()
-        case .copilot: return CopilotSession()
-        case .gemini:  return GeminiSession()
+        case .claude:   return ClaudeSession()
+        case .codex:    return CodexSession()
+        case .copilot:  return CopilotSession()
+        case .gemini:   return GeminiSession()
+        case .stakpak:  return StakpakSession()
         }
     }
 }
