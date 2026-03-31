@@ -165,7 +165,7 @@ class WalkerCharacter {
         }
 
         if wasBubbleVisibleBeforeEnvironmentHide {
-            updateThinkingBubble()
+            updateThinkingBubble(now: CACurrentMediaTime())
         }
     }
 
@@ -795,30 +795,30 @@ class WalkerCharacter {
 
     // MARK: - Frame Update
 
-    func update(dockX: CGFloat, dockWidth: CGFloat, dockTopY: CGFloat) {
+    // Energy optimization: throttle thinking bubble updates
+    private static let bubbleUpdateInterval: CFTimeInterval = 0.5
+    private var lastBubbleUpdate: CFTimeInterval = 0
+    // Track last position to skip redundant setFrameOrigin calls
+    private var lastFrameOrigin: CGPoint = .zero
+
+    func update(dockX: CGFloat, dockWidth: CGFloat, dockTopY: CGFloat, now: CFTimeInterval) {
         currentTravelDistance = max(dockWidth - displayWidth, 0)
         if isIdleForPopover {
             let travelDistance = currentTravelDistance
             let x = dockX + travelDistance * positionProgress + currentFlipCompensation
             let bottomPadding = displayHeight * 0.15
             let y = dockTopY - bottomPadding + yOffset
-            window.setFrameOrigin(NSPoint(x: x, y: y))
+            setWindowOriginIfChanged(x: x, y: y)
             updatePopoverPosition()
-            updateThinkingBubble()
+            updateThinkingBubble(now: now)
             return
         }
-
-        let now = CACurrentMediaTime()
 
         if isPaused {
             if now >= pauseEndTime {
                 startWalk()
             } else {
-                let travelDistance = max(dockWidth - displayWidth, 0)
-                let x = dockX + travelDistance * positionProgress + currentFlipCompensation
-                let bottomPadding = displayHeight * 0.15
-                let y = dockTopY - bottomPadding + yOffset
-                window.setFrameOrigin(NSPoint(x: x, y: y))
+                // Energy optimization: skip setFrameOrigin when paused and unmoving
                 return
             }
         }
@@ -846,9 +846,51 @@ class WalkerCharacter {
             let x = dockX + travelDistance * positionProgress + currentFlipCompensation
             let bottomPadding = displayHeight * 0.15
             let y = dockTopY - bottomPadding + yOffset
-            window.setFrameOrigin(NSPoint(x: x, y: y))
+            setWindowOriginIfChanged(x: x, y: y)
         }
 
-        updateThinkingBubble()
+        updateThinkingBubble(now: now)
+    }
+
+    // Energy optimization: skip setFrameOrigin when position hasn't changed
+    private func setWindowOriginIfChanged(x: CGFloat, y: CGFloat) {
+        let newOrigin = CGPoint(x: x, y: y)
+        if newOrigin != lastFrameOrigin {
+            lastFrameOrigin = newOrigin
+            window.setFrameOrigin(newOrigin)
+        }
+    }
+
+    // Energy optimization: throttle bubble updates to ~2fps
+    private func updateThinkingBubble(now: CFTimeInterval) {
+        guard now - lastBubbleUpdate >= Self.bubbleUpdateInterval else { return }
+        lastBubbleUpdate = now
+
+        if showingCompletion {
+            if now >= completionBubbleExpiry {
+                showingCompletion = false
+                hideBubble()
+                return
+            }
+            if isIdleForPopover {
+                completionBubbleExpiry += 1.0 / 60.0
+                hideBubble()
+            } else {
+                showBubble(text: currentPhrase, isCompletion: true)
+            }
+            return
+        }
+
+        if isAgentBusy && !isIdleForPopover {
+            let oldPhrase = currentPhrase
+            updateThinkingPhrase()
+            if currentPhrase != oldPhrase && !oldPhrase.isEmpty && !phraseAnimating {
+                animatePhraseChange(to: currentPhrase, isCompletion: false)
+            } else if !phraseAnimating {
+                showBubble(text: currentPhrase, isCompletion: false)
+            }
+        } else if !showingCompletion {
+            hideBubble()
+        }
     }
 }

@@ -88,6 +88,9 @@ class ShellEnvironment {
         // nested session and refuse to start.
         env.removeValue(forKey: "CLAUDECODE")
         env.removeValue(forKey: "CLAUDE_CODE_ENTRYPOINT")
+        // Remove Qoder's session markers for the same reason.
+        env.removeValue(forKey: "QODER_CODE")
+        env.removeValue(forKey: "QODER_CODE_ENTRYPOINT")
         return env
     }
 

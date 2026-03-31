@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Provider
 
 enum AgentProvider: String, CaseIterable {
-    case claude, codex, copilot, gemini
+    case claude, codex, copilot, gemini, qoder
 
     private static let defaultsKey = "selectedProvider"
 
@@ -23,6 +23,7 @@ enum AgentProvider: String, CaseIterable {
         case .codex:   return "Codex"
         case .copilot: return "Copilot"
         case .gemini:  return "Gemini"
+        case .qoder:   return "Qoder"
         }
     }
 
@@ -49,6 +50,8 @@ enum AgentProvider: String, CaseIterable {
             return "To install, run this in Terminal:\n  brew install copilot-cli\n\nOr: npm install -g @github/copilot-cli"
         case .gemini:
             return "To install, run this in Terminal:\n  npm install -g @google/gemini-cli\n\nThen authenticate:\n  gemini auth"
+        case .qoder:
+            return "To install, run this in Terminal:\n  curl -fsSL https://qoder.ai/install.sh | sh\n\nOr download from https://qoder.ai/download"
         }
     }
 
@@ -58,6 +61,7 @@ enum AgentProvider: String, CaseIterable {
         case .codex:   return CodexSession()
         case .copilot: return CopilotSession()
         case .gemini:  return GeminiSession()
+        case .qoder:   return QoderSession()
         }
     }
 }
