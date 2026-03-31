@@ -1,6 +1,7 @@
 import Foundation
 
 class ClaudeSession: AgentSession {
+    let workingDirectoryURL: URL
     private var process: Process?
     private var inputPipe: Pipe?
     private var outputPipe: Pipe?
@@ -11,6 +12,10 @@ class ClaudeSession: AgentSession {
     private(set) var isRunning = false
     private(set) var isBusy = false
     private static var binaryPath: String?
+
+    init(workingDirectoryURL: URL) {
+        self.workingDirectoryURL = workingDirectoryURL
+    }
 
     var onText: ((String) -> Void)?
     var onError: ((String) -> Void)?
@@ -58,7 +63,7 @@ class ClaudeSession: AgentSession {
             "--verbose",
             "--dangerously-skip-permissions"
         ]
-        proc.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+        proc.currentDirectoryURL = workingDirectoryURL
         proc.environment = ShellEnvironment.processEnvironment()
 
         let inPipe = Pipe()

@@ -37,31 +37,55 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
 
-        let char1Item = NSMenuItem(title: "Bruce", action: #selector(toggleChar1), keyEquivalent: "1")
-        char1Item.state = .on
-        menu.addItem(char1Item)
+        // Per-character submenus
+        if let chars = controller?.characters {
+            let shortcuts = ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
+            for (ci, char) in chars.enumerated() {
+                let charItem = NSMenuItem(title: char.characterId.capitalized, action: nil, keyEquivalent: "")
+                let charMenu = NSMenu()
+                charMenu.delegate = self
 
-        let char2Item = NSMenuItem(title: "Jazz", action: #selector(toggleChar2), keyEquivalent: "2")
-        char2Item.state = .on
-        menu.addItem(char2Item)
+                // Show/Hide toggle
+                let shortcut = ci < shortcuts.count ? shortcuts[ci] : ""
+                let visItem = NSMenuItem(title: "Show/Hide", action: #selector(toggleCharVisibility(_:)), keyEquivalent: shortcut)
+                visItem.representedObject = char
+                visItem.state = char.isManuallyVisible ? .on : .off
+                charMenu.addItem(visItem)
+
+                charMenu.addItem(NSMenuItem.separator())
+
+                // Provider submenu
+                let providerItem = NSMenuItem(title: "Provider", action: nil, keyEquivalent: "")
+                let providerMenu = NSMenu()
+                providerMenu.delegate = self
+                for (i, provider) in AgentProvider.allCases.enumerated() {
+                    let item = NSMenuItem(title: provider.displayName, action: #selector(switchCharProvider(_:)), keyEquivalent: "")
+                    item.tag = i
+                    item.representedObject = char
+                    item.state = provider == char.config.provider ? .on : .off
+                    providerMenu.addItem(item)
+                }
+                providerItem.submenu = providerMenu
+                charMenu.addItem(providerItem)
+
+                // Working Directory submenu
+                let dirItem = NSMenuItem(title: "Working Directory", action: nil, keyEquivalent: "")
+                let dirMenu = NSMenu()
+                dirMenu.delegate = self
+                rebuildDirectoryMenu(dirMenu, for: char)
+                dirItem.submenu = dirMenu
+                charMenu.addItem(dirItem)
+
+                charItem.submenu = charMenu
+                menu.addItem(charItem)
+            }
+        }
 
         menu.addItem(NSMenuItem.separator())
 
         let soundItem = NSMenuItem(title: "Sounds", action: #selector(toggleSounds(_:)), keyEquivalent: "")
         soundItem.state = .on
         menu.addItem(soundItem)
-
-        // Provider submenu
-        let providerItem = NSMenuItem(title: "Provider", action: nil, keyEquivalent: "")
-        let providerMenu = NSMenu()
-        for (i, provider) in AgentProvider.allCases.enumerated() {
-            let item = NSMenuItem(title: provider.displayName, action: #selector(switchProvider(_:)), keyEquivalent: "")
-            item.tag = i
-            item.state = provider == AgentProvider.current ? .on : .off
-            providerMenu.addItem(item)
-        }
-        providerItem.submenu = providerMenu
-        menu.addItem(providerItem)
 
         // Theme submenu
         let themeItem = NSMenuItem(title: "Style", action: nil, keyEquivalent: "")
@@ -142,11 +166,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc func switchProvider(_ sender: NSMenuItem) {
+    @objc func toggleCharVisibility(_ sender: NSMenuItem) {
+        guard let char = sender.representedObject as? WalkerCharacter else { return }
+        if char.isManuallyVisible {
+            char.setManuallyVisible(false)
+            sender.state = .off
+        } else {
+            char.setManuallyVisible(true)
+            sender.state = .on
+        }
+    }
+
+    @objc func switchCharProvider(_ sender: NSMenuItem) {
+        guard let char = sender.representedObject as? WalkerCharacter else { return }
         let idx = sender.tag
         let allProviders = AgentProvider.allCases
         guard idx < allProviders.count else { return }
-        AgentProvider.current = allProviders[idx]
+        char.config.provider = allProviders[idx]
 
         if let providerMenu = sender.menu {
             for item in providerMenu.items {
@@ -154,20 +190,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Terminate existing sessions and clear UI so title/placeholder update
-        controller?.characters.forEach { char in
-            char.session?.terminate()
-            char.session = nil
-            if char.isIdleForPopover {
-                char.closePopover()
-            }
-            // Always clear popover/bubble so they rebuild with new provider title/placeholder
-            char.popoverWindow?.orderOut(nil)
-            char.popoverWindow = nil
-            char.terminalView = nil
-            char.thinkingBubbleWindow?.orderOut(nil)
-            char.thinkingBubbleWindow = nil
-        }
+        resetCharSession(char)
     }
 
     @objc func switchDisplay(_ sender: NSMenuItem) {
@@ -178,30 +201,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             for item in displayMenu.items {
                 item.state = item.tag == idx ? .on : .off
             }
-        }
-    }
-
-    @objc func toggleChar1(_ sender: NSMenuItem) {
-        guard let chars = controller?.characters, chars.count > 0 else { return }
-        let char = chars[0]
-        if char.isManuallyVisible {
-            char.setManuallyVisible(false)
-            sender.state = .off
-        } else {
-            char.setManuallyVisible(true)
-            sender.state = .on
-        }
-    }
-
-    @objc func toggleChar2(_ sender: NSMenuItem) {
-        guard let chars = controller?.characters, chars.count > 1 else { return }
-        let char = chars[1]
-        if char.isManuallyVisible {
-            char.setManuallyVisible(false)
-            sender.state = .off
-        } else {
-            char.setManuallyVisible(true)
-            sender.state = .on
         }
     }
 
@@ -221,9 +220,120 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         sender.state = WalkerCharacter.soundsEnabled ? .on : .off
     }
 
+    // MARK: - Per-Character Working Directory
+
+    private func rebuildDirectoryMenu(_ menu: NSMenu, for char: WalkerCharacter) {
+        menu.removeAllItems()
+
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let currentURL = char.config.workingDirectoryURL
+        let isHome = currentURL.standardizedFileURL == home.standardizedFileURL
+
+        let homeItem = NSMenuItem(title: "Home (~/)", action: #selector(resetCharWorkingDirectory(_:)), keyEquivalent: "")
+        homeItem.representedObject = char
+        homeItem.state = isHome ? .on : .off
+        menu.addItem(homeItem)
+
+        if !isHome {
+            let displayPath = (currentURL.path as NSString).abbreviatingWithTildeInPath
+            let customItem = NSMenuItem(title: displayPath, action: nil, keyEquivalent: "")
+            customItem.state = .on
+            menu.addItem(customItem)
+        }
+
+        menu.addItem(NSMenuItem.separator())
+
+        let chooseItem = NSMenuItem(title: "Choose\u{2026}", action: #selector(chooseCharWorkingDirectory(_:)), keyEquivalent: "")
+        chooseItem.representedObject = char
+        menu.addItem(chooseItem)
+    }
+
+    @objc func chooseCharWorkingDirectory(_ sender: NSMenuItem) {
+        guard let char = sender.representedObject as? WalkerCharacter else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Select"
+        panel.message = "Choose a working directory for \(char.characterId.capitalized)"
+
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            char.config.workingDirectoryURL = url
+            self?.resetCharSession(char)
+            if let dirMenu = sender.menu {
+                self?.rebuildDirectoryMenu(dirMenu, for: char)
+            }
+        }
+    }
+
+    @objc func resetCharWorkingDirectory(_ sender: NSMenuItem) {
+        guard let char = sender.representedObject as? WalkerCharacter else { return }
+        char.config.workingDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+        resetCharSession(char)
+        if let dirMenu = sender.menu {
+            rebuildDirectoryMenu(dirMenu, for: char)
+        }
+    }
+
+    private func resetCharSession(_ char: WalkerCharacter) {
+        char.session?.terminate()
+        char.session = nil
+        if char.isIdleForPopover {
+            char.closePopover()
+        }
+        char.popoverWindow?.orderOut(nil)
+        char.popoverWindow = nil
+        char.terminalView = nil
+        char.thinkingBubbleWindow?.orderOut(nil)
+        char.thinkingBubbleWindow = nil
+    }
+
     @objc func quitApp() {
         NSApp.terminate(nil)
     }
 }
 
-extension AppDelegate: NSMenuDelegate {}
+extension AppDelegate: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        // Refresh per-character directory submenus when opened
+        guard let chars = controller?.characters else { return }
+        for char in chars {
+            // Find this character's submenu by checking the title
+            if let charItem = statusItem?.menu?.item(withTitle: char.characterId.capitalized),
+               let charMenu = charItem.submenu,
+               let dirItem = charMenu.item(withTitle: "Working Directory"),
+               menu == dirItem.submenu {
+                rebuildDirectoryMenu(menu, for: char)
+                return
+            }
+        }
+
+        // Refresh per-character provider submenus when opened
+        for char in chars {
+            if let charItem = statusItem?.menu?.item(withTitle: char.characterId.capitalized),
+               let charMenu = charItem.submenu,
+               let providerItem = charMenu.item(withTitle: "Provider"),
+               menu == providerItem.submenu {
+                for item in menu.items {
+                    let allProviders = AgentProvider.allCases
+                    if item.tag < allProviders.count {
+                        item.state = allProviders[item.tag] == char.config.provider ? .on : .off
+                    }
+                }
+                return
+            }
+        }
+
+        // Refresh show/hide state
+        for char in chars {
+            if let charItem = statusItem?.menu?.item(withTitle: char.characterId.capitalized),
+               menu == charItem.submenu {
+                if let visItem = menu.item(withTitle: "Show/Hide") {
+                    visItem.state = char.isManuallyVisible ? .on : .off
+                }
+                return
+            }
+        }
+    }
+}

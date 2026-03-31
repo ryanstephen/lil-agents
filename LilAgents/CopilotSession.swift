@@ -1,6 +1,7 @@
 import Foundation
 
 class CopilotSession: AgentSession {
+    let workingDirectoryURL: URL
     private var process: Process?
     private var outputPipe: Pipe?
     private var errorPipe: Pipe?
@@ -10,6 +11,10 @@ class CopilotSession: AgentSession {
     private var isFirstTurn = true
     private var useJsonOutput = true
     private static var binaryPath: String?
+
+    init(workingDirectoryURL: URL) {
+        self.workingDirectoryURL = workingDirectoryURL
+    }
 
     var onText: ((String) -> Void)?
     var onError: ((String) -> Void)?
@@ -71,7 +76,7 @@ class CopilotSession: AgentSession {
         args.append("--allow-all")
         proc.arguments = args
 
-        proc.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+        proc.currentDirectoryURL = workingDirectoryURL
         proc.environment = ShellEnvironment.processEnvironment(extraPaths: [
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".npm-global/bin").path
         ])

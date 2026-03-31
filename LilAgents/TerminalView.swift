@@ -138,13 +138,24 @@ class TerminalView: NSView {
         paddedCell.fieldBackgroundColor = nil
         paddedCell.fieldCornerRadius = 0
         paddedCell.placeholderAttributedString = NSAttributedString(
-            string: AgentProvider.current.inputPlaceholder,
+            string: "Ask...",
             attributes: [.font: t.font, .foregroundColor: t.textDim]
         )
         inputField.cell = paddedCell
         inputField.target = self
         inputField.action = #selector(inputSubmitted)
         addSubview(inputField)
+    }
+
+    func updatePlaceholder(_ text: String) {
+        let t = theme
+        if let cell = inputField.cell as? PaddedTextFieldCell {
+            cell.placeholderAttributedString = NSAttributedString(
+                string: text,
+                attributes: [.font: t.font, .foregroundColor: t.textDim]
+            )
+        }
+        inputField.needsDisplay = true
     }
 
     func resetState() {

@@ -1,6 +1,7 @@
 import Foundation
 
 class CodexSession: AgentSession {
+    let workingDirectoryURL: URL
     private var process: Process?
     private var outputPipe: Pipe?
     private var errorPipe: Pipe?
@@ -8,6 +9,10 @@ class CodexSession: AgentSession {
     private(set) var isRunning = false
     private(set) var isBusy = false
     private static var binaryPath: String?
+
+    init(workingDirectoryURL: URL) {
+        self.workingDirectoryURL = workingDirectoryURL
+    }
 
     var onText: ((String) -> Void)?
     var onError: ((String) -> Void)?
@@ -61,7 +66,7 @@ class CodexSession: AgentSession {
 
         proc.arguments = ["exec", "--json", "--full-auto", "--skip-git-repo-check", prompt]
 
-        proc.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+        proc.currentDirectoryURL = workingDirectoryURL
         proc.environment = ShellEnvironment.processEnvironment(extraPaths: [
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".npm-global/bin").path
         ])

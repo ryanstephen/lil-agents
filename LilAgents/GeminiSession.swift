@@ -1,6 +1,7 @@
 import Foundation
 
 class GeminiSession: AgentSession {
+    let workingDirectoryURL: URL
     private var process: Process?
     private var outputPipe: Pipe?
     private var errorPipe: Pipe?
@@ -9,6 +10,10 @@ class GeminiSession: AgentSession {
     private(set) var isBusy = false
     private var isFirstTurn = true
     private static var binaryPath: String?
+
+    init(workingDirectoryURL: URL) {
+        self.workingDirectoryURL = workingDirectoryURL
+    }
 
     var onText: ((String) -> Void)?
     var onError: ((String) -> Void)?
@@ -66,7 +71,7 @@ class GeminiSession: AgentSession {
         }
         proc.arguments = args
 
-        proc.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+        proc.currentDirectoryURL = workingDirectoryURL
         proc.environment = ShellEnvironment.processEnvironment(extraPaths: [
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".npm-global/bin").path,
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin").path

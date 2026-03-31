@@ -1,8 +1,47 @@
 import AVFoundation
 import AppKit
 
+struct CharacterConfig {
+    let characterId: String
+
+    private var providerKey: String { "provider_\(characterId)" }
+    private var directoryKey: String { "workingDirectory_\(characterId)" }
+
+    var provider: AgentProvider {
+        get {
+            let raw = UserDefaults.standard.string(forKey: providerKey) ?? "claude"
+            return AgentProvider(rawValue: raw) ?? .claude
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: providerKey)
+        }
+    }
+
+    var workingDirectoryURL: URL {
+        get {
+            if let path = UserDefaults.standard.string(forKey: directoryKey), !path.isEmpty {
+                var isDir: ObjCBool = false
+                if FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue {
+                    return URL(fileURLWithPath: path)
+                }
+            }
+            return FileManager.default.homeDirectoryForCurrentUser
+        }
+        set {
+            let home = FileManager.default.homeDirectoryForCurrentUser
+            if newValue.standardizedFileURL == home.standardizedFileURL {
+                UserDefaults.standard.removeObject(forKey: directoryKey)
+            } else {
+                UserDefaults.standard.set(newValue.path, forKey: directoryKey)
+            }
+        }
+    }
+}
+
 class WalkerCharacter {
     let videoName: String
+    let characterId: String
+    var config: CharacterConfig
     var window: NSWindow!
     var playerLayer: AVPlayerLayer!
     var queuePlayer: AVQueuePlayer!
@@ -59,8 +98,10 @@ class WalkerCharacter {
     private var wasPopoverVisibleBeforeEnvironmentHide = false
     private var wasBubbleVisibleBeforeEnvironmentHide = false
 
-    init(videoName: String) {
+    init(videoName: String, characterId: String) {
         self.videoName = videoName
+        self.characterId = characterId
+        self.config = CharacterConfig(characterId: characterId)
     }
 
     // MARK: - Setup
@@ -258,9 +299,9 @@ class WalkerCharacter {
         hideBubble()
 
         if session == nil {
-            let newSession = AgentProvider.current.createSession()
+            let newSession = config.provider.createSession(workingDirectoryURL: config.workingDirectoryURL)
             session = newSession
-            wireSession(newSession)
+            wireSession(newSession, providerName: config.provider.displayName)
             newSession.start()
         }
 
@@ -375,7 +416,7 @@ class WalkerCharacter {
         titleBar.layer?.backgroundColor = t.titleBarBg.cgColor
         container.addSubview(titleBar)
 
-        let titleLabel = NSTextField(labelWithString: t.titleString)
+        let titleLabel = NSTextField(labelWithString: t.titleString(for: config.provider))
         titleLabel.font = t.titleFont
         titleLabel.textColor = t.titleText
         titleLabel.frame = NSRect(x: 12, y: 6, width: popoverWidth - 80, height: 16)
@@ -409,6 +450,7 @@ class WalkerCharacter {
         let terminal = TerminalView(frame: NSRect(x: 0, y: 0, width: popoverWidth, height: popoverHeight - 29))
         terminal.characterColor = characterColor
         terminal.themeOverride = themeOverride
+        terminal.updatePlaceholder(config.provider.inputPlaceholder)
         terminal.autoresizingMask = [.width, .height]
         terminal.onSendMessage = { [weak self] message in
             self?.session?.send(message: message)
@@ -433,13 +475,13 @@ class WalkerCharacter {
         hideBubble()
         terminalView?.resetState()
         terminalView?.showSessionMessage()
-        let newSession = AgentProvider.current.createSession()
+        let newSession = config.provider.createSession(workingDirectoryURL: config.workingDirectoryURL)
         session = newSession
-        wireSession(newSession)
+        wireSession(newSession, providerName: config.provider.displayName)
         newSession.start()
     }
 
-    private func wireSession(_ session: any AgentSession, providerName: String = AgentProvider.current.displayName) {
+    private func wireSession(_ session: any AgentSession, providerName: String) {
         session.onText = { [weak self] text in
             self?.currentStreamingText += text
             self?.terminalView?.appendStreamingText(text)

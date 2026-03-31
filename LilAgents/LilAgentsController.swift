@@ -9,14 +9,15 @@ class LilAgentsController {
     private var isHiddenForEnvironment = false
 
     func start() {
-        let char1 = WalkerCharacter(videoName: "walk-bruce-01")
+        Self.migrateGlobalSettings()
+        let char1 = WalkerCharacter(videoName: "walk-bruce-01", characterId: "bruce")
         char1.accelStart = 3.0
         char1.fullSpeedStart = 3.75
         char1.decelStart = 8.0
         char1.walkStop = 8.5
         char1.walkAmountRange = 0.4...0.65
 
-        let char2 = WalkerCharacter(videoName: "walk-jazz-01")
+        let char2 = WalkerCharacter(videoName: "walk-jazz-01", characterId: "jazz")
         char2.accelStart = 3.9
         char2.fullSpeedStart = 4.5
         char2.decelStart = 8.0
@@ -226,6 +227,33 @@ class LilAgentsController {
         let sorted = activeChars.sorted { $0.positionProgress < $1.positionProgress }
         for (i, char) in sorted.enumerated() {
             char.window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + i)
+        }
+    }
+
+    // MARK: - Migration
+
+    private static let migrationKey = "didMigratePerCharacterSettings"
+
+    static func migrateGlobalSettings() {
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+        UserDefaults.standard.set(true, forKey: migrationKey)
+
+        // Copy old global provider to characters that don't have one set yet
+        if let oldProvider = UserDefaults.standard.string(forKey: "selectedProvider") {
+            for key in ["provider_bruce", "provider_jazz"] {
+                if UserDefaults.standard.string(forKey: key) == nil {
+                    UserDefaults.standard.set(oldProvider, forKey: key)
+                }
+            }
+        }
+
+        // Copy old global working directory to characters that don't have one set yet
+        if let oldDir = UserDefaults.standard.string(forKey: "workingDirectory") {
+            for key in ["workingDirectory_bruce", "workingDirectory_jazz"] {
+                if UserDefaults.standard.string(forKey: key) == nil {
+                    UserDefaults.standard.set(oldDir, forKey: key)
+                }
+            }
         }
     }
 

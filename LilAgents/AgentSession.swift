@@ -5,18 +5,6 @@ import Foundation
 enum AgentProvider: String, CaseIterable {
     case claude, codex, copilot, gemini
 
-    private static let defaultsKey = "selectedProvider"
-
-    static var current: AgentProvider {
-        get {
-            let raw = UserDefaults.standard.string(forKey: defaultsKey) ?? "claude"
-            return AgentProvider(rawValue: raw) ?? .claude
-        }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: defaultsKey)
-        }
-    }
-
     var displayName: String {
         switch self {
         case .claude:  return "Claude"
@@ -52,12 +40,12 @@ enum AgentProvider: String, CaseIterable {
         }
     }
 
-    func createSession() -> any AgentSession {
+    func createSession(workingDirectoryURL: URL) -> any AgentSession {
         switch self {
-        case .claude:  return ClaudeSession()
-        case .codex:   return CodexSession()
-        case .copilot: return CopilotSession()
-        case .gemini:  return GeminiSession()
+        case .claude:  return ClaudeSession(workingDirectoryURL: workingDirectoryURL)
+        case .codex:   return CodexSession(workingDirectoryURL: workingDirectoryURL)
+        case .copilot: return CopilotSession(workingDirectoryURL: workingDirectoryURL)
+        case .gemini:  return GeminiSession(workingDirectoryURL: workingDirectoryURL)
         }
     }
 }
