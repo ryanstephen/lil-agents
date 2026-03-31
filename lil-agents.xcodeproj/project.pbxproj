@@ -24,6 +24,7 @@
 		A10000010000000000000033 /* CodexSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000032 /* CodexSession.swift */; };
 		A10000010000000000000034 /* CopilotSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000033 /* CopilotSession.swift */; };
 		A10000010000000000000035 /* GeminiSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000034 /* GeminiSession.swift */; };
+		A10000010000000000000036 /* StakpakSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000035 /* StakpakSession.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,6 +46,7 @@
 		A10000020000000000000032 /* CodexSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSession.swift; sourceTree = "<group>"; };
 		A10000020000000000000033 /* CopilotSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotSession.swift; sourceTree = "<group>"; };
 		A10000020000000000000034 /* GeminiSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiSession.swift; sourceTree = "<group>"; };
+		A10000020000000000000035 /* StakpakSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StakpakSession.swift; sourceTree = "<group>"; };
 		A10000030000000000000001 /* lil agents.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "lil agents.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -80,6 +82,7 @@
 				A10000020000000000000032 /* CodexSession.swift */,
 				A10000020000000000000033 /* CopilotSession.swift */,
 				A10000020000000000000034 /* GeminiSession.swift */,
+				A10000020000000000000035 /* StakpakSession.swift */,
 				A10000020000000000000023 /* TerminalView.swift */,
 				A10000020000000000000024 /* WalkerCharacter.swift */,
 				A10000020000000000000025 /* LilAgentsController.swift */,
@@ -188,6 +191,7 @@
 				A10000010000000000000033 /* CodexSession.swift in Sources */,
 				A10000010000000000000034 /* CopilotSession.swift in Sources */,
 				A10000010000000000000035 /* GeminiSession.swift in Sources */,
+				A10000010000000000000036 /* StakpakSession.swift in Sources */,
 				A10000010000000000000023 /* TerminalView.swift in Sources */,
 				A10000010000000000000024 /* WalkerCharacter.swift in Sources */,
 				A10000010000000000000025 /* LilAgentsController.swift in Sources */,
