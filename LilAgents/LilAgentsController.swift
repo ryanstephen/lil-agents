@@ -8,6 +8,18 @@ class LilAgentsController {
     private static let onboardingKey = "hasCompletedOnboarding"
     private var isHiddenForEnvironment = false
 
+    // Energy optimization: cached dock geometry
+    private struct DockGeometry {
+        var x: CGFloat
+        var width: CGFloat
+        var topY: CGFloat
+        var screenWidth: CGFloat
+        var screenOriginY: CGFloat
+    }
+    private var cachedDock: DockGeometry?
+    private var lastDockCheckTime: CFTimeInterval = 0
+    private static let dockCacheInterval: CFTimeInterval = 2.0 // Re-check every 2s
+
     func start() {
         let char1 = WalkerCharacter(videoName: "walk-bruce-01")
         char1.accelStart = 3.0
@@ -135,12 +147,26 @@ class LilAgentsController {
 
     // MARK: - Display Link
 
+    // Energy optimization: throttle tick rate.
+    // Characters walk at ~10fps visually; 60fps is wasteful for window positioning.
+    private static let tickInterval: CFTimeInterval = 1.0 / 15.0 // 15fps
+    private var lastTickTime: CFTimeInterval = 0
+
     private func startDisplayLink() {
         CVDisplayLinkCreateWithActiveCGDisplays(&displayLink)
         guard let displayLink = displayLink else { return }
 
         let callback: CVDisplayLinkOutputCallback = { _, _, _, _, _, userInfo -> CVReturn in
             let controller = Unmanaged<LilAgentsController>.fromOpaque(userInfo!).takeUnretainedValue()
+            let now = CVGetCurrentHostTime()
+            let nowSeconds = Double(now) / Double(CVGetHostClockFrequency())
+
+            // Throttle: skip frames faster than 1/15s
+            if nowSeconds - controller.lastTickTime < 1.0 / 15.0 {
+                return kCVReturnSuccess
+            }
+            controller.lastTickTime = nowSeconds
+
             DispatchQueue.main.async {
                 controller.tick()
             }
@@ -198,20 +224,30 @@ class LilAgentsController {
         guard let screen = activeScreen else { return }
         guard updateEnvironmentVisibility(for: screen) else { return }
 
-        let screenWidth = screen.frame.width
-        let dockX: CGFloat
-        let dockWidth: CGFloat
-        let dockTopY: CGFloat
+        let now = CACurrentMediaTime()
 
-        // Dock is on this screen — constrain to dock area
-        (dockX, dockWidth) = getDockIconArea(screenWidth: screenWidth)
-        dockTopY = screen.visibleFrame.origin.y
+        // Energy optimization: cache dock geometry, re-read periodically
+        if cachedDock == nil ||
+           now - lastDockCheckTime > Self.dockCacheInterval ||
+           cachedDock?.screenWidth != screen.frame.width ||
+           cachedDock?.screenOriginY != screen.frame.origin.y {
+            let (dx, dw) = getDockIconArea(screenWidth: screen.frame.width)
+            cachedDock = DockGeometry(
+                x: dx, width: dw,
+                topY: screen.visibleFrame.origin.y,
+                screenWidth: screen.frame.width,
+                screenOriginY: screen.frame.origin.y
+            )
+            lastDockCheckTime = now
+        }
+        let dockX = cachedDock!.x
+        let dockWidth = cachedDock!.width
+        let dockTopY = cachedDock!.topY
 
         updateDebugLine(dockX: dockX, dockWidth: dockWidth, dockTopY: dockTopY)
 
         let activeChars = characters.filter { $0.window.isVisible && $0.isManuallyVisible }
 
-        let now = CACurrentMediaTime()
         let anyWalking = activeChars.contains { $0.isWalking }
         for char in activeChars {
             if char.isIdleForPopover { continue }
@@ -220,12 +256,16 @@ class LilAgentsController {
             }
         }
         for char in activeChars {
-            char.update(dockX: dockX, dockWidth: dockWidth, dockTopY: dockTopY)
+            char.update(dockX: dockX, dockWidth: dockWidth, dockTopY: dockTopY, now: now)
         }
 
+        // Energy optimization: only reassign window level when z-order changes
         let sorted = activeChars.sorted { $0.positionProgress < $1.positionProgress }
         for (i, char) in sorted.enumerated() {
-            char.window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + i)
+            let desiredLevel = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + i)
+            if char.window.level != desiredLevel {
+                char.window.level = desiredLevel
+            }
         }
     }
 

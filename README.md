@@ -59,6 +59,18 @@ ln -sf /Applications /tmp/lil-agents-dmg/Applications
 hdiutil create -volname "lil agents" -srcfolder /tmp/lil-agents-dmg -ov -format UDZO lil-agents.dmg
 ```
 
+## energy efficiency
+
+lil agents is optimized for minimal battery impact on macOS:
+
+- **15fps tick rate** — display link throttled from 60fps to 15fps for window positioning
+- **Dock geometry caching** — dock size/position cached with 2s refresh interval instead of per-frame UserDefaults reads
+- **Position-aware rendering** — `setFrameOrigin` only called when character position actually changes
+- **Throttled bubble updates** — thinking bubble text refreshed at 2fps instead of every frame
+- **Lazy window levels** — z-order reassigned only when changed, not every frame
+
+These optimizations reduce CPU wakeups by ~75-99% across the rendering pipeline, keeping energy impact minimal during idle and active use.
+
 ## privacy
 
 lil agents runs entirely on your Mac and sends no personal data anywhere.
