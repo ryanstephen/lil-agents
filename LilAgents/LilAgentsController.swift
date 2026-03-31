@@ -14,14 +14,14 @@ class LilAgentsController {
         char1.fullSpeedStart = 3.75
         char1.decelStart = 8.0
         char1.walkStop = 8.5
-        char1.walkAmountRange = 0.4...0.65
+        char1.walkAmountRange = 0.5...0.9
 
         let char2 = WalkerCharacter(videoName: "walk-jazz-01")
         char2.accelStart = 3.9
         char2.fullSpeedStart = 4.5
         char2.decelStart = 8.0
         char2.walkStop = 8.75
-        char2.walkAmountRange = 0.35...0.6
+        char2.walkAmountRange = 0.5...0.9
         char1.yOffset = -3
         char2.yOffset = -7
         char1.characterColor = NSColor(red: 0.4, green: 0.72, blue: 0.55, alpha: 1.0)
@@ -34,7 +34,7 @@ class LilAgentsController {
         char2.positionProgress = 0.7
 
         char1.pauseEndTime = CACurrentMediaTime() + Double.random(in: 0.5...2.0)
-        char2.pauseEndTime = CACurrentMediaTime() + Double.random(in: 8.0...14.0)
+        char2.pauseEndTime = CACurrentMediaTime() + Double.random(in: 2.0...5.0)
 
         char1.setup()
         char2.setup()
@@ -203,8 +203,10 @@ class LilAgentsController {
         let dockWidth: CGFloat
         let dockTopY: CGFloat
 
-        // Dock is on this screen — constrain to dock area
-        (dockX, dockWidth) = getDockIconArea(screenWidth: screenWidth)
+        // Let characters roam the full screen width with small padding
+        let padding: CGFloat = 20
+        dockX = screen.frame.origin.x + padding
+        dockWidth = screenWidth - padding * 2
         dockTopY = screen.visibleFrame.origin.y
 
         updateDebugLine(dockX: dockX, dockWidth: dockWidth, dockTopY: dockTopY)
@@ -212,13 +214,7 @@ class LilAgentsController {
         let activeChars = characters.filter { $0.window.isVisible && $0.isManuallyVisible }
 
         let now = CACurrentMediaTime()
-        let anyWalking = activeChars.contains { $0.isWalking }
-        for char in activeChars {
-            if char.isIdleForPopover { continue }
-            if char.isPaused && now >= char.pauseEndTime && anyWalking {
-                char.pauseEndTime = now + Double.random(in: 5.0...10.0)
-            }
-        }
+        // Allow both characters to walk simultaneously — no blocking
         for char in activeChars {
             char.update(dockX: dockX, dockWidth: dockWidth, dockTopY: dockTopY)
         }

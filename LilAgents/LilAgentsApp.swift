@@ -54,11 +54,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Provider submenu
         let providerItem = NSMenuItem(title: "Provider", action: nil, keyEquivalent: "")
         let providerMenu = NSMenu()
+        providerMenu.delegate = self
         for (i, provider) in AgentProvider.allCases.enumerated() {
-            let item = NSMenuItem(title: provider.displayName, action: #selector(switchProvider(_:)), keyEquivalent: "")
-            item.tag = i
-            item.state = provider == AgentProvider.current ? .on : .off
-            providerMenu.addItem(item)
+            if provider == .live {
+                // Live Session gets a submenu with discovered sessions
+                let liveItem = NSMenuItem(title: provider.displayName, action: nil, keyEquivalent: "")
+                liveItem.tag = i
+                liveItem.state = provider == AgentProvider.current ? .on : .off
+                let liveMenu = NSMenu()
+                liveMenu.delegate = self
+                liveItem.submenu = liveMenu
+                providerMenu.addItem(liveItem)
+            } else {
+                let item = NSMenuItem(title: provider.displayName, action: #selector(switchProvider(_:)), keyEquivalent: "")
+                item.tag = i
+                item.state = provider == AgentProvider.current ? .on : .off
+                providerMenu.addItem(item)
+            }
         }
         providerItem.submenu = providerMenu
         menu.addItem(providerItem)
@@ -226,4 +238,76 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-extension AppDelegate: NSMenuDelegate {}
+extension AppDelegate: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        // Check if this is the Live Session submenu
+        if let parentMenu = statusItem?.menu?.item(withTitle: "Provider")?.submenu {
+            for item in parentMenu.items where item.title == "Live Session" && item.submenu === menu {
+                rebuildLiveSessionMenu(menu)
+                return
+            }
+        }
+    }
+
+    private func rebuildLiveSessionMenu(_ menu: NSMenu) {
+        menu.removeAllItems()
+
+        let sessions = LiveSession.discoverSessions()
+        let selectedId = AgentProvider.selectedLiveSession?.id
+
+        if sessions.isEmpty {
+            let emptyItem = NSMenuItem(title: "No active sessions", action: nil, keyEquivalent: "")
+            emptyItem.isEnabled = false
+            menu.addItem(emptyItem)
+        } else {
+            for (i, session) in sessions.enumerated() {
+                let title = "\(session.projectName)  —  \(session.age)"
+                let item = NSMenuItem(title: title, action: #selector(selectLiveSession(_:)), keyEquivalent: "")
+                item.tag = i
+                item.state = session.id == selectedId ? .on : .off
+                item.representedObject = session.id
+                item.toolTip = session.cwd
+                menu.addItem(item)
+            }
+        }
+
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Refresh", action: #selector(refreshLiveSessions(_:)), keyEquivalent: ""))
+    }
+
+    @objc func selectLiveSession(_ sender: NSMenuItem) {
+        let sessions = LiveSession.discoverSessions()
+        guard sender.tag < sessions.count else { return }
+        let chosen = sessions[sender.tag]
+
+        // Set provider to .live and store selected session
+        AgentProvider.current = .live
+        AgentProvider.selectedLiveSession = chosen
+
+        // Update provider menu checkmarks
+        if let providerMenu = statusItem?.menu?.item(withTitle: "Provider")?.submenu {
+            let liveIdx = AgentProvider.allCases.firstIndex(of: .live)!
+            for item in providerMenu.items {
+                item.state = item.tag == liveIdx ? .on : .off
+            }
+        }
+
+        // Terminate existing sessions and reconnect with new live session
+        controller?.characters.forEach { char in
+            char.session?.terminate()
+            char.session = nil
+            if char.isIdleForPopover {
+                char.closePopover()
+            }
+            char.popoverWindow?.orderOut(nil)
+            char.popoverWindow = nil
+            char.terminalView = nil
+            char.thinkingBubbleWindow?.orderOut(nil)
+            char.thinkingBubbleWindow = nil
+        }
+    }
+
+    @objc func refreshLiveSessions(_ sender: NSMenuItem) {
+        // The menu will rebuild on next open via menuNeedsUpdate
+    }
+}

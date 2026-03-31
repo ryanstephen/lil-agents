@@ -189,16 +189,23 @@ class TerminalView: NSView {
             scrollToBottom()
             return true
 
+        case "/sessions":
+            // Handled by WalkerCharacter via onSendMessage — pass through
+            onSendMessage?("/sessions")
+            return true
+
         case "/help":
             let t = theme
             let help = NSMutableAttributedString()
             help.append(NSAttributedString(string: "  lil agents — slash commands\n",
                 attributes: [.font: t.fontBold, .foregroundColor: t.accentColor]))
-            help.append(NSAttributedString(string: "  /clear  ", attributes: [.font: t.fontBold, .foregroundColor: t.textPrimary]))
+            help.append(NSAttributedString(string: "  /clear     ", attributes: [.font: t.fontBold, .foregroundColor: t.textPrimary]))
             help.append(NSAttributedString(string: "clear chat history\n", attributes: [.font: t.font, .foregroundColor: t.textDim]))
-            help.append(NSAttributedString(string: "  /copy   ", attributes: [.font: t.fontBold, .foregroundColor: t.textPrimary]))
+            help.append(NSAttributedString(string: "  /copy      ", attributes: [.font: t.fontBold, .foregroundColor: t.textPrimary]))
             help.append(NSAttributedString(string: "copy last response\n", attributes: [.font: t.font, .foregroundColor: t.textDim]))
-            help.append(NSAttributedString(string: "  /help   ", attributes: [.font: t.fontBold, .foregroundColor: t.textPrimary]))
+            help.append(NSAttributedString(string: "  /sessions  ", attributes: [.font: t.fontBold, .foregroundColor: t.textPrimary]))
+            help.append(NSAttributedString(string: "list active Claude Code sessions\n", attributes: [.font: t.font, .foregroundColor: t.textDim]))
+            help.append(NSAttributedString(string: "  /help      ", attributes: [.font: t.fontBold, .foregroundColor: t.textPrimary]))
             help.append(NSAttributedString(string: "show this message\n", attributes: [.font: t.font, .foregroundColor: t.textDim]))
             textView.textStorage?.append(help)
             scrollToBottom()
