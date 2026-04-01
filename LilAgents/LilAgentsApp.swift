@@ -68,6 +68,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 providerItem.submenu = providerMenu
                 charMenu.addItem(providerItem)
 
+                // Size submenu
+                let sizeItem = NSMenuItem(title: "Size", action: nil, keyEquivalent: "")
+                let sizeMenu = NSMenu()
+                sizeMenu.delegate = self
+                for (i, size) in CharacterSize.allCases.reversed().enumerated() {
+                    let item = NSMenuItem(title: size.displayName, action: #selector(switchCharSize(_:)), keyEquivalent: "")
+                    item.tag = i
+                    item.representedObject = char
+                    item.state = size == char.config.size ? .on : .off
+                    sizeMenu.addItem(item)
+                }
+                sizeItem.submenu = sizeMenu
+                charMenu.addItem(sizeItem)
+
                 // Working Directory submenu
                 let dirItem = NSMenuItem(title: "Working Directory", action: nil, keyEquivalent: "")
                 let dirMenu = NSMenu()
@@ -193,6 +207,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         resetCharSession(char)
     }
 
+    @objc func switchCharSize(_ sender: NSMenuItem) {
+        guard let char = sender.representedObject as? WalkerCharacter else { return }
+        let idx = sender.tag
+        let allSizes = CharacterSize.allCases.reversed() as [CharacterSize]
+        guard idx < allSizes.count else { return }
+        char.config.size = allSizes[idx]
+
+        if let sizeMenu = sender.menu {
+            for item in sizeMenu.items {
+                item.state = item.tag == idx ? .on : .off
+            }
+        }
+
+        char.applySize()
+    }
+
     @objc func switchDisplay(_ sender: NSMenuItem) {
         let idx = sender.tag
         controller?.pinnedScreenIndex = idx
@@ -305,6 +335,22 @@ extension AppDelegate: NSMenuDelegate {
                let dirItem = charMenu.item(withTitle: "Working Directory"),
                menu == dirItem.submenu {
                 rebuildDirectoryMenu(menu, for: char)
+                return
+            }
+        }
+
+        // Refresh per-character size submenus when opened
+        for char in chars {
+            if let charItem = statusItem?.menu?.item(withTitle: char.characterId.capitalized),
+               let charMenu = charItem.submenu,
+               let sizeItem = charMenu.item(withTitle: "Size"),
+               menu == sizeItem.submenu {
+                let allSizes = CharacterSize.allCases.reversed() as [CharacterSize]
+                for item in menu.items {
+                    if item.tag < allSizes.count {
+                        item.state = allSizes[item.tag] == char.config.size ? .on : .off
+                    }
+                }
                 return
             }
         }

@@ -1,11 +1,24 @@
 import AVFoundation
 import AppKit
 
+enum CharacterSize: String, CaseIterable {
+    case small, medium, big
+    var displayHeight: CGFloat {
+        switch self {
+        case .small: return 200
+        case .medium: return 350
+        case .big: return 500
+        }
+    }
+    var displayName: String { rawValue.capitalized }
+}
+
 struct CharacterConfig {
     let characterId: String
 
     private var providerKey: String { "provider_\(characterId)" }
     private var directoryKey: String { "workingDirectory_\(characterId)" }
+    private var sizeKey: String { "size_\(characterId)" }
 
     var provider: AgentProvider {
         get {
@@ -36,6 +49,16 @@ struct CharacterConfig {
             }
         }
     }
+
+    var size: CharacterSize {
+        get {
+            let raw = UserDefaults.standard.string(forKey: sizeKey) ?? "big"
+            return CharacterSize(rawValue: raw) ?? .big
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: sizeKey)
+        }
+    }
 }
 
 class WalkerCharacter {
@@ -49,7 +72,7 @@ class WalkerCharacter {
 
     let videoWidth: CGFloat = 1080
     let videoHeight: CGFloat = 1920
-    let displayHeight: CGFloat = 200
+    var displayHeight: CGFloat { config.size.displayHeight }
     var displayWidth: CGFloat { displayHeight * (videoWidth / videoHeight) }
 
     // Walk timing (per-character, from frame analysis)
@@ -148,6 +171,28 @@ class WalkerCharacter {
 
         window.contentView = hostView
         window.orderFrontRegardless()
+    }
+
+    func applySize() {
+        guard let screen = NSScreen.main else { return }
+        let dockTopY = screen.visibleFrame.origin.y
+        let bottomPadding = displayHeight * 0.15
+        let y = dockTopY - bottomPadding + yOffset
+
+        let contentRect = CGRect(x: window.frame.origin.x, y: y, width: displayWidth, height: displayHeight)
+        window.setFrame(contentRect, display: true)
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        playerLayer.frame = CGRect(x: 0, y: 0, width: displayWidth, height: displayHeight)
+        CATransaction.commit()
+
+        if let hostView = window.contentView {
+            hostView.frame = CGRect(x: 0, y: 0, width: displayWidth, height: displayHeight)
+        }
+
+        updateFlip()
+        updatePopoverPosition()
     }
 
     // MARK: - Visibility
@@ -385,8 +430,8 @@ class WalkerCharacter {
 
     func createPopoverWindow() {
         let t = resolvedTheme
-        let popoverWidth: CGFloat = 420
-        let popoverHeight: CGFloat = 310
+        let popoverWidth: CGFloat = 380
+        let popoverHeight: CGFloat = 440
 
         let win = KeyableWindow(
             contentRect: CGRect(x: 0, y: 0, width: popoverWidth, height: popoverHeight),
