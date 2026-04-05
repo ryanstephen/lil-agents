@@ -61,10 +61,10 @@ class GeminiSession: AgentSession {
         proc.executableURL = URL(fileURLWithPath: binaryPath)
 
         // gemini --yolo -p "message" for agentic use
-        // --continue for subsequent turns (if supported by installed version)
+        // --resume latest for subsequent turns
         var args: [String] = ["--yolo", "-p", message]
         if !isFirstTurn {
-            args = ["--yolo", "--continue", "-p", message]
+            args = ["--yolo", "--resume", "latest", "-p", message]
         }
         proc.arguments = args
 
