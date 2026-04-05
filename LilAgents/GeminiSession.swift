@@ -69,10 +69,21 @@ class GeminiSession: AgentSession {
         proc.arguments = args
 
         proc.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
-        proc.environment = ShellEnvironment.processEnvironment(extraPaths: [
+        
+        var env = ShellEnvironment.processEnvironment(extraPaths: [
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".npm-global/bin").path,
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin").path
         ])
+        
+        // Inject GEMINI_API_KEY from ~/.gemini/settings.json if it exists
+        let settingsURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".gemini/settings.json")
+        if let data = try? Data(contentsOf: settingsURL),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let apiKey = json["apiKey"] as? String {
+            env["GEMINI_API_KEY"] = apiKey
+        }
+        
+        proc.environment = env
 
         let outPipe = Pipe()
         let errPipe = Pipe()
