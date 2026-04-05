@@ -1,16 +1,8 @@
 import Foundation
 import CoreGraphics
+import AppKit
 
 func runDockVisibilityTests() {
-    func expect(
-        _ condition: @autoclosure () -> Bool,
-        _ message: String
-    ) {
-        if !condition() {
-            fputs("FAIL: \(message)\n", stderr)
-            exit(1)
-        }
-    }
 
     let screenFrame = CGRect(x: 0, y: 0, width: 1440, height: 900)
 
@@ -72,6 +64,16 @@ func runDockVisibilityTests() {
             dockAutohideEnabled: true
         ),
         "keeps characters hidden on non-main screens when only the menu bar is visible"
+    )
+
+    expect(
+        DockVisibility.collectionBehavior(showOnAllDesktops: false) == [.moveToActiveSpace, .stationary],
+        "uses active-space behavior when show on all desktops is off"
+    )
+
+    expect(
+        DockVisibility.collectionBehavior(showOnAllDesktops: true) == [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary],
+        "uses all-spaces behavior when show on all desktops is on"
     )
 
     print("DockVisibility tests passed")
