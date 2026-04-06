@@ -6,6 +6,44 @@
         <description>lil agents update feed</description>
         <language>en</language>
         <item>
+            <title>v1.2.2</title>
+            <description><![CDATA[
+                <h3>OpenClaw provider</h3>
+                <ul>
+                    <li>Added OpenClaw as a new AI provider — connect to your self-hosted OpenClaw gateway over WebSocket</li>
+                </ul>
+            ]]></description>
+            <pubDate>Sat, 05 Apr 2026 20:00:00 -0700</pubDate>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>1.2.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/ryanstephen/lil-agents/releases/download/v1.2.2/LilAgents-v1.2.2.zip"
+                type="application/octet-stream"
+                sparkle:edSignature="SrSavqJ+Xkm4Z3/oZ4VT0+mvUuA6ywEGmmVmBYxx87AqwN7CLvnTrE2pgyGRksuVOpvEsHf0JiEPlKrSqlMmCg=="
+                length="21020366"
+            />
+        </item>
+        <item>
+            <title>v1.2.1</title>
+            <description><![CDATA[
+                <h3>Universal binary support</h3>
+                <ul>
+                    <li>Added Intel (x86_64) support — the app now ships as a Universal binary that runs natively on both Apple Silicon and Intel Macs</li>
+                </ul>
+            ]]></description>
+            <pubDate>Sat, 05 Apr 2026 18:41:00 -0700</pubDate>
+            <sparkle:version>5</sparkle:version>
+            <sparkle:shortVersionString>1.2.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/ryanstephen/lil-agents/releases/download/v1.2.1/LilAgents-v1.2.1.zip"
+                type="application/octet-stream"
+                sparkle:edSignature="l5zcgio2v7CG/Y88w8+jTCkTx289Yl5EH6nt6qACXxs24P3fJfk22IRKap0NNBzTkVxt8dVs87AeCsStm4UjCA=="
+                length="20960478"
+            />
+        </item>
+        <item>
             <title>v1.2</title>
             <description><![CDATA[
                 <h3>Pick your agent, per character</h3>

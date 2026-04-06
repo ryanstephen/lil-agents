@@ -26,6 +26,7 @@
 		A10000010000000000000035 /* GeminiSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000034 /* GeminiSession.swift */; };
 		A10000010000000000000036 /* OpenCodeSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000035 /* OpenCodeSession.swift */; };
 		A10000010000000000000037 /* DockVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000036 /* DockVisibility.swift */; };
+		A10000010000000000000038 /* OpenClawSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000037 /* OpenClawSession.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +50,7 @@
 		A10000020000000000000034 /* GeminiSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiSession.swift; sourceTree = "<group>"; };
 		A10000020000000000000035 /* OpenCodeSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeSession.swift; sourceTree = "<group>"; };
 		A10000020000000000000036 /* DockVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockVisibility.swift; sourceTree = "<group>"; };
+		A10000020000000000000037 /* OpenClawSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawSession.swift; sourceTree = "<group>"; };
 		A10000030000000000000001 /* lil agents.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "lil agents.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -85,6 +87,7 @@
 				A10000020000000000000033 /* CopilotSession.swift */,
 				A10000020000000000000034 /* GeminiSession.swift */,
 				A10000020000000000000035 /* OpenCodeSession.swift */,
+				A10000020000000000000037 /* OpenClawSession.swift */,
 				A10000020000000000000036 /* DockVisibility.swift */,
 				A10000020000000000000023 /* TerminalView.swift */,
 				A10000020000000000000024 /* WalkerCharacter.swift */,
@@ -196,6 +199,7 @@
 				A10000010000000000000035 /* GeminiSession.swift in Sources */,
 				A10000010000000000000036 /* OpenCodeSession.swift in Sources */,
 				A10000010000000000000037 /* DockVisibility.swift in Sources */,
+				A10000010000000000000038 /* OpenClawSession.swift in Sources */,
 				A10000010000000000000023 /* TerminalView.swift in Sources */,
 				A10000010000000000000024 /* WalkerCharacter.swift in Sources */,
 				A10000010000000000000025 /* LilAgentsController.swift in Sources */,
@@ -319,7 +323,7 @@
 				CODE_SIGN_ENTITLEMENTS = LilAgents/LilAgents.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 6;
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LilAgents/Info.plist;
@@ -331,7 +335,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lilagents.app;
 				PRODUCT_NAME = "lil agents";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -347,7 +351,7 @@
 				CODE_SIGN_ENTITLEMENTS = LilAgents/LilAgents.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 6;
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LilAgents/Info.plist;
@@ -359,7 +363,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.2.2;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lilagents.app;
 				PRODUCT_NAME = "lil agents";

@@ -64,6 +64,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             providerMenu.addItem(item)
         }
+        providerMenu.addItem(NSMenuItem.separator())
+        let gatewayItem = NSMenuItem(title: "Advanced Settings\u{2026}", action: #selector(openGatewaySettings), keyEquivalent: "")
+        gatewayItem.tag = -1
+        providerMenu.addItem(gatewayItem)
+
         providerItem.submenu = providerMenu
         menu.addItem(providerItem)
 
@@ -237,6 +242,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func toggleSounds(_ sender: NSMenuItem) {
         WalkerCharacter.soundsEnabled.toggle()
         sender.state = WalkerCharacter.soundsEnabled ? .on : .off
+    }
+
+    @objc func openGatewaySettings() {
+        OpenClawSession.showSettingsPanel { [weak self] in
+            // If OpenClaw is the active provider, reconnect with new settings
+            guard AgentProvider.current == .openclaw else { return }
+            self?.controller?.characters.forEach { char in
+                char.session?.terminate()
+                char.session = nil
+            }
+        }
     }
 
     @objc func quitApp() {
