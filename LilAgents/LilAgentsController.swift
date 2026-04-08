@@ -184,6 +184,10 @@ class LilAgentsController {
     }
 
     private func shouldShowCharacters(on screen: NSScreen) -> Bool {
+        if AppPreferences.showOnAllDesktops {
+            return true
+        }
+
         // User explicitly pinned to this screen — always show
         if pinnedScreenIndex >= 0, pinnedScreenIndex < NSScreen.screens.count {
             return true

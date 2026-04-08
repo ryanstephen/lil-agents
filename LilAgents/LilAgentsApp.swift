@@ -101,11 +101,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let displayItem = NSMenuItem(title: "Display", action: nil, keyEquivalent: "")
         let displayMenu = NSMenu()
         displayMenu.delegate = self
+        let allDesktopsItem = NSMenuItem(title: "Show on All Desktops", action: #selector(toggleShowOnAllDesktops(_:)), keyEquivalent: "")
+        allDesktopsItem.state = AppPreferences.showOnAllDesktops ? .on : .off
+        displayMenu.addItem(allDesktopsItem)
+        displayMenu.addItem(NSMenuItem.separator())
         let autoItem = NSMenuItem(title: "Auto (Main Display)", action: #selector(switchDisplay(_:)), keyEquivalent: "")
         autoItem.tag = -1
         autoItem.state = .on
         displayMenu.addItem(autoItem)
-        displayMenu.addItem(NSMenuItem.separator())
         for (i, screen) in NSScreen.screens.enumerated() {
             let name = screen.localizedName
             let item = NSMenuItem(title: name, action: #selector(switchDisplay(_:)), keyEquivalent: "")
@@ -215,6 +218,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @objc func toggleShowOnAllDesktops(_ sender: NSMenuItem) {
+        let enabled = !AppPreferences.showOnAllDesktops
+        AppPreferences.showOnAllDesktops = enabled
+        sender.state = enabled ? .on : .off
+        syncWindowCollectionBehaviors()
+    }
+
     @objc func toggleChar1(_ sender: NSMenuItem) {
         guard let chars = controller?.characters, chars.count > 0 else { return }
         let char = chars[0]
@@ -257,6 +267,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func quitApp() {
         NSApp.terminate(nil)
+    }
+
+    private func syncWindowCollectionBehaviors() {
+        let behavior = DockVisibility.collectionBehavior()
+
+        controller?.characters.forEach { character in
+            character.window.collectionBehavior = behavior
+            character.popoverWindow?.collectionBehavior = behavior
+            character.thinkingBubbleWindow?.collectionBehavior = behavior
+        }
     }
 }
 

@@ -160,7 +160,7 @@ class WalkerCharacter {
         window.hasShadow = false
         window.level = .statusBar
         window.ignoresMouseEvents = false
-        window.collectionBehavior = [.moveToActiveSpace, .stationary]
+        window.collectionBehavior = windowCollectionBehavior
 
         let hostView = CharacterContentView(frame: CGRect(x: 0, y: 0, width: displayWidth, height: displayHeight))
         hostView.character = self
@@ -405,6 +405,10 @@ class WalkerCharacter {
         (themeOverride ?? PopoverTheme.current).withCharacterColor(characterColor).withCustomFont()
     }
 
+    private var windowCollectionBehavior: NSWindow.CollectionBehavior {
+        DockVisibility.collectionBehavior()
+    }
+
     func createPopoverWindow() {
         let t = resolvedTheme
         let popoverWidth: CGFloat = 420
@@ -420,7 +424,7 @@ class WalkerCharacter {
         win.backgroundColor = .clear
         win.hasShadow = true
         win.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 10)
-        win.collectionBehavior = [.moveToActiveSpace, .stationary]
+        win.collectionBehavior = windowCollectionBehavior
         let brightness = t.popoverBg.redComponent * 0.299 + t.popoverBg.greenComponent * 0.587 + t.popoverBg.blueComponent * 0.114
         win.appearance = NSAppearance(named: brightness < 0.5 ? .darkAqua : .aqua)
 
@@ -792,7 +796,7 @@ class WalkerCharacter {
         win.hasShadow = true
         win.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 5)
         win.ignoresMouseEvents = true
-        win.collectionBehavior = [.moveToActiveSpace, .stationary]
+        win.collectionBehavior = windowCollectionBehavior
 
         let container = NSView(frame: NSRect(x: 0, y: 0, width: w, height: h))
         container.wantsLayer = true

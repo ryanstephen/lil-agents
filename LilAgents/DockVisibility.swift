@@ -1,6 +1,27 @@
+import AppKit
 import CoreGraphics
+import Foundation
+
+enum AppPreferences {
+    static let showOnAllDesktopsKey = "showOnAllDesktops"
+
+    static var showOnAllDesktops: Bool {
+        get {
+            UserDefaults.standard.bool(forKey: showOnAllDesktopsKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: showOnAllDesktopsKey)
+        }
+    }
+}
 
 enum DockVisibility {
+    static func collectionBehavior(showOnAllDesktops: Bool = AppPreferences.showOnAllDesktops) -> NSWindow.CollectionBehavior {
+        showOnAllDesktops
+            ? [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+            : [.moveToActiveSpace, .stationary]
+    }
+
     static func screenHasVisibleDockReservedArea(
         screenFrame: CGRect,
         visibleFrame: CGRect
