@@ -59,7 +59,9 @@ class ClaudeSession: AgentSession {
             "--dangerously-skip-permissions"
         ]
         proc.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
-        proc.environment = ShellEnvironment.processEnvironment()
+        var env = ShellEnvironment.processEnvironment()
+        env.removeValue(forKey: "CLAUDECODE")
+        proc.environment = env
 
         let inPipe = Pipe()
         let outPipe = Pipe()
