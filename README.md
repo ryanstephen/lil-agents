@@ -10,6 +10,19 @@ Supports **Claude Code**, **OpenAI Codex**, **GitHub Copilot**, and **Google Gem
 
 **[Download for macOS](https://lilagents.xyz)** · [Website](https://lilagents.xyz)
 
+## install
+
+### Homebrew (recommended)
+
+```bash
+brew tap ryanstephen/lil-agents
+brew install --cask lil-agents
+```
+
+### Direct download
+
+Download the latest release from [lilagents.xyz](https://lilagents.xyz).
+
 ## features
 
 - Animated characters rendered from transparent HEVC video
