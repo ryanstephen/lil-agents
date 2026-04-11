@@ -107,6 +107,7 @@ class WalkerCharacter {
     private var wasDetachedVisibleBeforeEnvironmentHide = false
     private var wasBubbleVisibleBeforeEnvironmentHide = false
     private var detachedWindowCloseObserver: NSObjectProtocol?
+    private var popoverBecameKeyObserver: NSObjectProtocol?
     private weak var providerMenuHostWindow: NSWindow?
 
     private static let detachedTitleLeadingInset: CGFloat = 90
@@ -192,6 +193,7 @@ class WalkerCharacter {
         if let o = detachedWindowCloseObserver {
             NotificationCenter.default.removeObserver(o)
         }
+        removePopoverBecameKeyObserver()
     }
 
     // MARK: - Visibility
@@ -245,6 +247,7 @@ class WalkerCharacter {
 
         if isIdleForPopover && wasPopoverVisibleBeforeEnvironmentHide {
             updatePopoverPosition()
+            ensurePopoverAboveCharacterWindow()
             popoverWindow?.orderFrontRegardless()
             popoverWindow?.makeKey()
             if let terminal = terminalView {
@@ -309,6 +312,7 @@ class WalkerCharacter {
         terminalView?.endStreaming()
 
         updatePopoverPosition()
+        ensurePopoverAboveCharacterWindow()
         popoverWindow?.orderFrontRegardless()
 
         // Set up click-outside to dismiss and complete onboarding
@@ -325,6 +329,7 @@ class WalkerCharacter {
         if let monitor = clickOutsideMonitor { NSEvent.removeMonitor(monitor); clickOutsideMonitor = nil }
         if let monitor = escapeKeyMonitor { NSEvent.removeMonitor(monitor); escapeKeyMonitor = nil }
         popoverWindow?.orderOut(nil)
+        removePopoverBecameKeyObserver()
         popoverWindow = nil
         terminalView = nil
         isIdleForPopover = false
@@ -373,6 +378,7 @@ class WalkerCharacter {
         }
 
         updatePopoverPosition()
+        ensurePopoverAboveCharacterWindow()
         popoverWindow?.orderFrontRegardless()
         popoverWindow?.makeKey()
 
@@ -443,6 +449,7 @@ class WalkerCharacter {
     }
 
     func createPopoverWindow() {
+        removePopoverBecameKeyObserver()
         let t = resolvedTheme
         let popoverWidth: CGFloat = 420
         let popoverHeight: CGFloat = 310
@@ -456,6 +463,7 @@ class WalkerCharacter {
         win.isOpaque = false
         win.backgroundColor = .clear
         win.hasShadow = true
+        // Level is synced to sit just above this character's window (see `ensurePopoverAboveCharacterWindow`).
         win.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 10)
         win.collectionBehavior = [.moveToActiveSpace, .stationary]
         let brightness = t.popoverBg.redComponent * 0.299 + t.popoverBg.greenComponent * 0.587 + t.popoverBg.blueComponent * 0.114
@@ -550,6 +558,33 @@ class WalkerCharacter {
         win.contentView = container
         popoverWindow = win
         terminalView = terminal
+
+        popoverBecameKeyObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: win,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self, self.popoverWindow === win else { return }
+            self.ensurePopoverAboveCharacterWindow()
+            win.orderFrontRegardless()
+        }
+    }
+
+    private func removePopoverBecameKeyObserver() {
+        if let o = popoverBecameKeyObserver {
+            NotificationCenter.default.removeObserver(o)
+            popoverBecameKeyObserver = nil
+        }
+    }
+
+    /// Keeps the dock popover above this character's window while dock z-ordering updates each frame.
+    func ensurePopoverAboveCharacterWindow() {
+        guard let popover = popoverWindow, popover.isVisible else { return }
+        let anchor = window.level
+        let target = NSWindow.Level(rawValue: anchor.rawValue + 1)
+        if popover.level != target {
+            popover.level = target
+        }
     }
 
     /// After `terminalView` is replaced (e.g. style switch), rebind session callbacks to the new view.
@@ -676,6 +711,7 @@ class WalkerCharacter {
         removeEventMonitors()
         term.removeFromSuperview()
         popoverWindow?.orderOut(nil)
+        removePopoverBecameKeyObserver()
         popoverWindow = nil
 
         detachedSession = sess
@@ -923,6 +959,7 @@ class WalkerCharacter {
             session?.terminate()
             session = nil
             popoverWindow?.orderOut(nil)
+            removePopoverBecameKeyObserver()
             popoverWindow = nil
             terminalView = nil
             thinkingBubbleWindow?.orderOut(nil)

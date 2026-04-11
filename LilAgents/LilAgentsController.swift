@@ -246,6 +246,9 @@ class LilAgentsController {
         for (i, char) in sorted.enumerated() {
             char.window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + i)
         }
+        for char in activeChars where char.isIdleForPopover {
+            char.ensurePopoverAboveCharacterWindow()
+        }
     }
 
     deinit {
