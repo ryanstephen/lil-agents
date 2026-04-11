@@ -5,8 +5,15 @@ class KeyableWindow: NSWindow {
     override var canBecomeMain: Bool { true }
 }
 
+class NonKeyableWindow: NSWindow {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
 class CharacterContentView: NSView {
     weak var character: WalkerCharacter?
+
+    override var isOpaque: Bool { false }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let localPoint = convert(point, from: superview)
@@ -24,6 +31,11 @@ class CharacterContentView: NSView {
 
         let captureRect = CGRect(x: screenPoint.x - 0.5, y: flippedY - 0.5, width: 1, height: 1)
         guard let windowID = window?.windowNumber, windowID > 0 else { return nil }
+
+        // Fallback hit rect for when pixel sampling fails or video is paused
+        let insetX = bounds.width * 0.2
+        let insetY = bounds.height * 0.15
+        let hitRect = bounds.insetBy(dx: insetX, dy: insetY)
 
         if let image = CGWindowListCreateImage(
             captureRect,
@@ -43,14 +55,12 @@ class CharacterContentView: NSView {
                 if pixel[3] > 30 {
                     return self
                 }
-                return nil
+                // Pixel was transparent — use fallback rect if in center area
+                return hitRect.contains(localPoint) ? self : nil
             }
         }
 
-        // Fallback: accept click if within center 60% of the view
-        let insetX = bounds.width * 0.2
-        let insetY = bounds.height * 0.15
-        let hitRect = bounds.insetBy(dx: insetX, dy: insetY)
+        // CGWindowListCreateImage failed — use fallback
         return hitRect.contains(localPoint) ? self : nil
     }
 

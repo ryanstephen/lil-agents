@@ -157,6 +157,23 @@ class TerminalView: NSView {
         addSubview(inputField)
     }
 
+    /// Re-apply colors and fonts from the current `theme` (e.g. after global style switch while this view is kept open).
+    func reapplyAppearanceFromTheme() {
+        let t = theme
+        textView.textColor = t.textPrimary
+        textView.font = t.font
+        textView.linkTextAttributes = [
+            .foregroundColor: t.accentColor,
+            .underlineStyle: NSUnderlineStyle.single.rawValue
+        ]
+        if let cell = inputField.cell as? PaddedTextFieldCell {
+            cell.font = t.font
+            cell.textColor = t.textPrimary
+        }
+        updatePlaceholder()
+        needsDisplay = true
+    }
+
     func resetState() {
         isStreaming = false
         currentAssistantText = ""

@@ -24,7 +24,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        controller?.characters.forEach { $0.session?.terminate() }
+        controller?.characters.forEach {
+            $0.session?.terminate()
+            $0.terminateAllDetachedSessions()
+        }
     }
 
     // MARK: - Menu Bar
@@ -144,6 +147,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         controller?.characters.forEach { char in
+            if char.hasDetachedChats {
+                char.refreshDetachedChromeTheme()
+                char.reapplyAppearanceToAllDetachedTerminals()
+            }
             let wasOpen = char.isIdleForPopover
             if wasOpen { char.popoverWindow?.orderOut(nil) }
             char.popoverWindow = nil
@@ -151,10 +158,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             char.thinkingBubbleWindow = nil
             if wasOpen {
                 char.createPopoverWindow()
+                char.rewirePopoverSessionIfNeeded()
                 if let session = char.session, !session.history.isEmpty {
                     char.terminalView?.replayHistory(session.history)
                 }
                 char.updatePopoverPosition()
+                char.ensurePopoverAboveCharacterWindow()
                 char.popoverWindow?.orderFrontRegardless()
                 char.popoverWindow?.makeKey()
                 if let terminal = char.terminalView {
@@ -173,6 +182,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         controller?.characters.forEach { char in
             if char.provider == newProvider { return }
             char.provider = newProvider
+            char.discardDetachedChatSilently()
             char.session?.terminate()
             char.session = nil
             char.popoverWindow?.orderOut(nil)
