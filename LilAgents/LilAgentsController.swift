@@ -41,8 +41,9 @@ class LilAgentsController {
         char1.flipXOffset = 0
         char2.flipXOffset = -9
 
-        char1.positionProgress = 0.3
-        char2.positionProgress = 0.7
+        // Start near the ends of the track so the first walk tends to spread them along the dock.
+        char1.positionProgress = 0.1
+        char2.positionProgress = 0.9
 
         char1.pauseEndTime = CACurrentMediaTime() + Double.random(in: 0.5...2.0)
         char2.pauseEndTime = CACurrentMediaTime() + Double.random(in: 8.0...14.0)
@@ -129,6 +130,12 @@ class LilAgentsController {
 
         // Small fudge factor for dock edge padding
         dockWidth *= 1.15
+
+        // Ensure a minimum width so characters aren't bunched together when
+        // dock defaults under-report the icon count (common in sandboxed apps).
+        let minDockWidth = screenWidth * 0.5
+        dockWidth = max(dockWidth, minDockWidth)
+
         let dockX = (screenWidth - dockWidth) / 2.0
         return (dockX, dockWidth)
     }

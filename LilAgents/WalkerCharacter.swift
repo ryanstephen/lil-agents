@@ -848,6 +848,43 @@ class WalkerCharacter {
 
     // MARK: - Walking
 
+    /// Other dock characters whose positions we use to avoid landing stacked (no teleporting — only the planned walk endpoint moves).
+    private func peerCharactersForSeparation() -> [WalkerCharacter] {
+        guard let all = controller?.characters else { return [] }
+        return all.filter { other in
+            other !== self && other.window.isVisible && other.isManuallyVisible && !other.isIdleForPopover
+        }
+    }
+
+    private var minWalkSeparationPixels: CGFloat {
+        max(displayWidth * 0.35, 72)
+    }
+
+    /// Nudges `end` along the same direction as `start → end` so the stop stays at least `minWalkSeparationPixels` from each peer’s current progress.
+    private func applyPeerWalkEndSeparation(start: CGFloat, end: CGFloat) -> CGFloat {
+        let peers = peerCharactersForSeparation()
+        guard !peers.isEmpty, currentTravelDistance > 1 else { return end }
+        let minProg = minWalkSeparationPixels / currentTravelDistance
+        var e = end
+        for _ in 0..<6 {
+            var changed = false
+            for peer in peers {
+                let p = peer.positionProgress
+                guard abs(e - p) < minProg else { continue }
+                if e >= start {
+                    let n = max(e, p + minProg)
+                    if n != e { e = n; changed = true }
+                } else {
+                    let n = min(e, p - minProg)
+                    if n != e { e = n; changed = true }
+                }
+            }
+            e = min(max(e, 0), 1)
+            if !changed { break }
+        }
+        return e
+    }
+
     func startWalk() {
         isPaused = false
         isWalking = true
@@ -860,6 +897,17 @@ class WalkerCharacter {
             goingRight = true
         } else {
             goingRight = Bool.random()
+            let peers = peerCharactersForSeparation()
+            if currentTravelDistance > 1,
+               let nearest = peers.min(by: {
+                   abs($0.positionProgress - positionProgress) < abs($1.positionProgress - positionProgress)
+               }) {
+                let sep = abs(nearest.positionProgress - positionProgress) * currentTravelDistance
+                if sep < minWalkSeparationPixels {
+                    // Peer is to the left on the dock → go right (increase progress), and vice versa.
+                    goingRight = nearest.positionProgress < positionProgress
+                }
+            }
         }
 
         walkStartPos = positionProgress
@@ -867,28 +915,30 @@ class WalkerCharacter {
         let referenceWidth: CGFloat = 500.0
         let walkPixels = CGFloat.random(in: walkAmountRange) * referenceWidth
         let walkAmount = currentTravelDistance > 0 ? walkPixels / currentTravelDistance : 0.3
+        let tentativeEnd: CGFloat
         if goingRight {
-            walkEndPos = min(walkStartPos + walkAmount, 1.0)
+            tentativeEnd = min(walkStartPos + walkAmount, 1.0)
         } else {
-            walkEndPos = max(walkStartPos - walkAmount, 0.0)
+            tentativeEnd = max(walkStartPos - walkAmount, 0.0)
         }
+        walkEndPos = applyPeerWalkEndSeparation(start: walkStartPos, end: tentativeEnd)
+
+        // If separation pinned us to essentially no move, try the other direction with the same stride length.
+        let minStrideProg = 8 / max(currentTravelDistance, 1)
+        if abs(walkEndPos - walkStartPos) < minStrideProg {
+            goingRight.toggle()
+            let altEnd: CGFloat
+            if goingRight {
+                altEnd = min(walkStartPos + walkAmount, 1.0)
+            } else {
+                altEnd = max(walkStartPos - walkAmount, 0.0)
+            }
+            walkEndPos = applyPeerWalkEndSeparation(start: walkStartPos, end: altEnd)
+        }
+
         // Store pixel positions so walk speed stays consistent if screen changes mid-walk
         walkStartPixel = walkStartPos * currentTravelDistance
         walkEndPixel = walkEndPos * currentTravelDistance
-
-        let minSeparation: CGFloat = 0.12
-        if let siblings = controller?.characters {
-            for sibling in siblings where sibling !== self {
-                let sibPos = sibling.positionProgress
-                if abs(walkEndPos - sibPos) < minSeparation {
-                    if goingRight {
-                        walkEndPos = max(walkStartPos, sibPos - minSeparation)
-                    } else {
-                        walkEndPos = min(walkStartPos, sibPos + minSeparation)
-                    }
-                }
-            }
-        }
 
         updateFlip()
         queuePlayer.seek(to: .zero)
