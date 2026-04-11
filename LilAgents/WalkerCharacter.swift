@@ -167,7 +167,7 @@ class WalkerCharacter {
         let y = dockTopY - bottomPadding + yOffset
 
         let contentRect = CGRect(x: 0, y: y, width: displayWidth, height: displayHeight)
-        window = NSWindow(
+        window = NonKeyableWindow(
             contentRect: contentRect,
             styleMask: .borderless,
             backing: .buffered,
@@ -275,14 +275,6 @@ class WalkerCharacter {
     func handleClick() {
         if isOnboarding {
             openOnboardingPopover()
-            return
-        }
-        if let detached = detachedChatWindow {
-            detached.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            if let field = detachedTerminalView?.inputField {
-                detached.makeFirstResponder(field)
-            }
             return
         }
         if isIdleForPopover {
@@ -587,11 +579,12 @@ class WalkerCharacter {
         }
     }
 
-    /// Keeps the dock popover above this character's window while dock z-ordering updates each frame.
+    /// Keeps the dock popover above this character's window.
     func ensurePopoverAboveCharacterWindow() {
         guard let popover = popoverWindow, popover.isVisible else { return }
-        let anchor = window.level
-        let target = NSWindow.Level(rawValue: anchor.rawValue + 1)
+        // Use a fixed level high enough to be above all character windows,
+        // same as detached window so they can naturally order via clicks
+        let target = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 15)
         if popover.level != target {
             popover.level = target
         }
@@ -716,7 +709,11 @@ class WalkerCharacter {
         guard let pw = popoverWindow,
               let senderView = sender as? NSView,
               senderView.window === pw else { return }
-        guard !isOnboarding, detachedChatWindow == nil else { return }
+        guard !isOnboarding else { return }
+        // Allow popping out again while a detached window exists: replace it with this popover's session.
+        if detachedChatWindow != nil {
+            discardDetachedChatSilently()
+        }
         guard let sess = session, let term = terminalView else { return }
 
         removeEventMonitors()
@@ -768,6 +765,11 @@ class WalkerCharacter {
 
     private func createDetachedChatWindowHostingExistingTerminal() {
         guard let term = detachedTerminalView else { return }
+        if let o = detachedWindowCloseObserver {
+            NotificationCenter.default.removeObserver(o)
+            detachedWindowCloseObserver = nil
+        }
+        removeDetachedBecameKeyObserver()
         let t = resolvedTheme
         let winW: CGFloat = 760
         let winH: CGFloat = 520
@@ -785,7 +787,7 @@ class WalkerCharacter {
         win.isOpaque = false
         win.backgroundColor = .clear
         win.hasShadow = true
-        win.level = .floating
+        win.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 15)
         win.collectionBehavior = [.moveToActiveSpace]
         let brightness = t.popoverBg.redComponent * 0.299 + t.popoverBg.greenComponent * 0.587 + t.popoverBg.blueComponent * 0.114
         win.appearance = NSAppearance(named: brightness < 0.5 ? .darkAqua : .aqua)
