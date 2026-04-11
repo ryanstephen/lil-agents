@@ -26,7 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         controller?.characters.forEach {
             $0.session?.terminate()
-            $0.detachedSession?.terminate()
+            $0.terminateAllDetachedSessions()
         }
     }
 
@@ -147,9 +147,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         controller?.characters.forEach { char in
-            if char.detachedChatWindow != nil {
+            if char.hasDetachedChats {
                 char.refreshDetachedChromeTheme()
-                char.detachedTerminalView?.reapplyAppearanceFromTheme()
+                char.reapplyAppearanceToAllDetachedTerminals()
             }
             let wasOpen = char.isIdleForPopover
             if wasOpen { char.popoverWindow?.orderOut(nil) }

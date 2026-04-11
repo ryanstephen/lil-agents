@@ -22,7 +22,28 @@ enum CharacterSize: String, CaseIterable {
 class WalkerCharacter {
     private enum ChatChromeHost {
         case dockPopover
-        case detachedWindow
+        case detachedWindow(NSWindow)
+    }
+
+    private final class DetachedChatPanel {
+        let window: NSWindow
+        let terminal: TerminalView
+        var session: any AgentSession
+        var providerOverride: AgentProvider?
+        var closeObserver: NSObjectProtocol?
+        var becameKeyObserver: NSObjectProtocol?
+
+        init(
+            window: NSWindow,
+            terminal: TerminalView,
+            session: any AgentSession,
+            providerOverride: AgentProvider?
+        ) {
+            self.window = window
+            self.terminal = terminal
+            self.session = session
+            self.providerOverride = providerOverride
+        }
     }
 
     let videoName: String
@@ -89,25 +110,25 @@ class WalkerCharacter {
     var isIdleForPopover = false
     var popoverWindow: NSWindow?
     var terminalView: TerminalView?
-    var detachedChatWindow: NSWindow?
-    var detachedTerminalView: TerminalView?
-    var detachedSession: (any AgentSession)?
-    private var detachedProvider: AgentProvider?
+    private var detachedPanels: [DetachedChatPanel] = []
     var session: (any AgentSession)?
     var clickOutsideMonitor: Any?
     var escapeKeyMonitor: Any?
     var currentStreamingText = ""
     weak var controller: LilAgentsController?
     var themeOverride: PopoverTheme?
-    var isAgentBusy: Bool { (session?.isBusy ?? false) || (detachedSession?.isBusy ?? false) }
+    var isAgentBusy: Bool {
+        if session?.isBusy == true { return true }
+        return detachedPanels.contains { $0.session.isBusy }
+    }
+
+    var hasDetachedChats: Bool { !detachedPanels.isEmpty }
     var thinkingBubbleWindow: NSWindow?
     private(set) var isManuallyVisible = true
     private var environmentHiddenAt: CFTimeInterval?
     private var wasPopoverVisibleBeforeEnvironmentHide = false
     private var wasDetachedVisibleBeforeEnvironmentHide = false
     private var wasBubbleVisibleBeforeEnvironmentHide = false
-    private var detachedWindowCloseObserver: NSObjectProtocol?
-    private var detachedBecameKeyObserver: NSObjectProtocol?
     private var popoverBecameKeyObserver: NSObjectProtocol?
     private weak var providerMenuHostWindow: NSWindow?
 
@@ -191,10 +212,11 @@ class WalkerCharacter {
     }
 
     deinit {
-        if let o = detachedWindowCloseObserver {
-            NotificationCenter.default.removeObserver(o)
+        for panel in detachedPanels {
+            if let o = panel.closeObserver { NotificationCenter.default.removeObserver(o) }
+            if let o = panel.becameKeyObserver { NotificationCenter.default.removeObserver(o) }
         }
-        removeDetachedBecameKeyObserver()
+        detachedPanels.removeAll()
         removePopoverBecameKeyObserver()
     }
 
@@ -210,7 +232,9 @@ class WalkerCharacter {
             queuePlayer.pause()
             window.orderOut(nil)
             popoverWindow?.orderOut(nil)
-            detachedChatWindow?.orderOut(nil)
+            for panel in detachedPanels {
+                panel.window.orderOut(nil)
+            }
             thinkingBubbleWindow?.orderOut(nil)
         }
     }
@@ -220,13 +244,15 @@ class WalkerCharacter {
 
         environmentHiddenAt = CACurrentMediaTime()
         wasPopoverVisibleBeforeEnvironmentHide = popoverWindow?.isVisible ?? false
-        wasDetachedVisibleBeforeEnvironmentHide = detachedChatWindow?.isVisible ?? false
+        wasDetachedVisibleBeforeEnvironmentHide = detachedPanels.contains { $0.window.isVisible }
         wasBubbleVisibleBeforeEnvironmentHide = thinkingBubbleWindow?.isVisible ?? false
 
         queuePlayer.pause()
         window.orderOut(nil)
         popoverWindow?.orderOut(nil)
-        detachedChatWindow?.orderOut(nil)
+        for panel in detachedPanels {
+            panel.window.orderOut(nil)
+        }
         thinkingBubbleWindow?.orderOut(nil)
     }
 
@@ -257,11 +283,13 @@ class WalkerCharacter {
             }
         }
 
-        if wasDetachedVisibleBeforeEnvironmentHide, let detached = detachedChatWindow {
-            detached.orderFrontRegardless()
-            detached.makeKey()
-            if let field = detachedTerminalView?.inputField {
-                detached.makeFirstResponder(field)
+        if wasDetachedVisibleBeforeEnvironmentHide {
+            for panel in detachedPanels {
+                panel.window.orderFrontRegardless()
+            }
+            if let front = detachedPanels.last {
+                front.window.makeKey()
+                front.window.makeFirstResponder(front.terminal.inputField)
             }
         }
 
@@ -596,49 +624,96 @@ class WalkerCharacter {
         wireSession(s, terminal: term)
     }
 
+    private func detachedPanel(for window: NSWindow) -> DetachedChatPanel? {
+        detachedPanels.first { $0.window === window }
+    }
+
+    private func bindDetachedPanelCallbacks(_ panel: DetachedChatPanel) {
+        let win = panel.window
+        let term = panel.terminal
+        wireSession(panel.session, terminal: term)
+        term.onSendMessage = { [weak self] message in
+            guard let self, let p = self.detachedPanel(for: win) else { return }
+            p.session.send(message: message)
+        }
+        term.onClearRequested = { [weak self] in
+            self?.resetSession(for: .detachedWindow(win))
+        }
+    }
+
+    private func handleDetachedWindowDidClose(_ panel: DetachedChatPanel) {
+        if let o = panel.closeObserver {
+            NotificationCenter.default.removeObserver(o)
+            panel.closeObserver = nil
+        }
+        if let o = panel.becameKeyObserver {
+            NotificationCenter.default.removeObserver(o)
+            panel.becameKeyObserver = nil
+        }
+        let sess = panel.session
+        detachedPanels.removeAll { $0 === panel }
+        DispatchQueue.main.async {
+            sess.terminate()
+        }
+    }
+
+    func terminateAllDetachedSessions() {
+        for panel in detachedPanels {
+            panel.session.terminate()
+        }
+    }
+
+    func reapplyAppearanceToAllDetachedTerminals() {
+        for panel in detachedPanels {
+            panel.terminal.reapplyAppearanceFromTheme()
+        }
+    }
+
     /// Close popped-out chat without going through `didClose` teardown (e.g. global provider switch).
     func discardDetachedChatSilently() {
-        if let o = detachedWindowCloseObserver {
-            NotificationCenter.default.removeObserver(o)
-            detachedWindowCloseObserver = nil
-        }
-        removeDetachedBecameKeyObserver()
-        let sess = detachedSession
-        let win = detachedChatWindow
-        detachedSession = nil
-        detachedTerminalView = nil
-        detachedProvider = nil
-        detachedChatWindow = nil
-        win?.close()
-        DispatchQueue.main.async {
-            sess?.terminate()
+        let panels = detachedPanels
+        detachedPanels.removeAll()
+        for panel in panels {
+            if let o = panel.closeObserver {
+                NotificationCenter.default.removeObserver(o)
+                panel.closeObserver = nil
+            }
+            if let o = panel.becameKeyObserver {
+                NotificationCenter.default.removeObserver(o)
+                panel.becameKeyObserver = nil
+            }
+            let sess = panel.session
+            panel.window.close()
+            DispatchQueue.main.async {
+                sess.terminate()
+            }
         }
     }
 
     private func resetSession(for host: ChatChromeHost) {
         switch host {
-        case .detachedWindow:
-            guard detachedChatWindow != nil else { return }
-            detachedSession?.terminate()
+        case .detachedWindow(let win):
+            guard let panel = detachedPanel(for: win) else { return }
+            panel.session.terminate()
             currentStreamingText = ""
             showingCompletion = false
             currentPhrase = ""
             completionBubbleExpiry = 0
             hideBubble()
-            detachedTerminalView?.resetState()
-            detachedTerminalView?.showSessionMessage()
-            let p = detachedProvider ?? provider
+            let term = panel.terminal
+            term.resetState()
+            term.showSessionMessage()
+            let p = panel.providerOverride ?? provider
             let newSession = p.createSession()
-            detachedSession = newSession
-            if let term = detachedTerminalView {
-                term.provider = p
-                wireSession(newSession, terminal: term)
-                term.onSendMessage = { [weak self] message in
-                    self?.detachedSession?.send(message: message)
-                }
-                term.onClearRequested = { [weak self] in
-                    self?.resetSession(for: .detachedWindow)
-                }
+            panel.session = newSession
+            term.provider = p
+            wireSession(newSession, terminal: term)
+            term.onSendMessage = { [weak self] message in
+                guard let self, let p = self.detachedPanel(for: win) else { return }
+                p.session.send(message: message)
+            }
+            term.onClearRequested = { [weak self] in
+                self?.resetSession(for: .detachedWindow(win))
             }
             newSession.start()
 
@@ -690,9 +765,13 @@ class WalkerCharacter {
         session.onProcessExit = { [weak self, weak terminal] in
             guard let self = self else { return }
             terminal?.endStreaming()
-            let pname = (terminal === self.detachedTerminalView)
-                ? (self.detachedProvider ?? self.provider).displayName
-                : self.provider.displayName
+            let pname: String
+            if let term = terminal,
+               let panel = self.detachedPanels.first(where: { $0.terminal === term }) {
+                pname = (panel.providerOverride ?? self.provider).displayName
+            } else {
+                pname = self.provider.displayName
+            }
             terminal?.appendError("\(pname) session ended.")
         }
 
@@ -710,10 +789,6 @@ class WalkerCharacter {
               let senderView = sender as? NSView,
               senderView.window === pw else { return }
         guard !isOnboarding else { return }
-        // Allow popping out again while a detached window exists: replace it with this popover's session.
-        if detachedChatWindow != nil {
-            discardDetachedChatSilently()
-        }
         guard let sess = session, let term = terminalView else { return }
 
         removeEventMonitors()
@@ -722,21 +797,11 @@ class WalkerCharacter {
         removePopoverBecameKeyObserver()
         popoverWindow = nil
 
-        detachedSession = sess
         session = nil
-        detachedTerminalView = term
         terminalView = nil
-        detachedProvider = provider
 
-        wireSession(sess, terminal: term)
-        term.onSendMessage = { [weak self] message in
-            self?.detachedSession?.send(message: message)
-        }
-        term.onClearRequested = { [weak self] in
-            self?.resetSession(for: .detachedWindow)
-        }
-
-        createDetachedChatWindowHostingExistingTerminal()
+        let panel = createDetachedChatWindow(session: sess, terminal: term, providerOverride: provider)
+        bindDetachedPanelCallbacks(panel)
 
         isIdleForPopover = false
 
@@ -755,21 +820,17 @@ class WalkerCharacter {
         queuePlayer.pause()
         queuePlayer.seek(to: .zero)
 
-        detachedChatWindow?.center()
-        detachedChatWindow?.makeKeyAndOrderFront(nil)
+        panel.window.center()
+        panel.window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        if let field = detachedTerminalView?.inputField {
-            detachedChatWindow?.makeFirstResponder(field)
-        }
+        panel.window.makeFirstResponder(panel.terminal.inputField)
     }
 
-    private func createDetachedChatWindowHostingExistingTerminal() {
-        guard let term = detachedTerminalView else { return }
-        if let o = detachedWindowCloseObserver {
-            NotificationCenter.default.removeObserver(o)
-            detachedWindowCloseObserver = nil
-        }
-        removeDetachedBecameKeyObserver()
+    private func createDetachedChatWindow(
+        session sess: any AgentSession,
+        terminal term: TerminalView,
+        providerOverride: AgentProvider?
+    ) -> DetachedChatPanel {
         let t = resolvedTheme
         let winW: CGFloat = 760
         let winH: CGFloat = 520
@@ -791,7 +852,7 @@ class WalkerCharacter {
         win.collectionBehavior = [.moveToActiveSpace]
         let brightness = t.popoverBg.redComponent * 0.299 + t.popoverBg.greenComponent * 0.587 + t.popoverBg.blueComponent * 0.114
         win.appearance = NSAppearance(named: brightness < 0.5 ? .darkAqua : .aqua)
-        let detachedP = detachedProvider ?? provider
+        let detachedP = providerOverride ?? provider
         win.title = "\(name) — \(detachedP.displayName)"
         term.provider = detachedP
 
@@ -870,79 +931,64 @@ class WalkerCharacter {
 
         win.contentView = container
 
-        let closingDetachedWindow = win
-        detachedWindowCloseObserver = NotificationCenter.default.addObserver(
+        let panel = DetachedChatPanel(
+            window: win,
+            terminal: term,
+            session: sess,
+            providerOverride: providerOverride
+        )
+
+        panel.closeObserver = NotificationCenter.default.addObserver(
             forName: Notification.Name("NSWindowDidClose"),
-            object: closingDetachedWindow,
+            object: win,
             queue: .main
         ) { [weak self] note in
-            guard let self = self,
+            guard let self,
                   let closed = note.object as? NSWindow,
-                  closed === self.detachedChatWindow else { return }
-            self.completeDetachedChatTeardownAfterWindowClosed()
+                  let found = self.detachedPanels.first(where: { $0.window === closed }) else { return }
+            self.handleDetachedWindowDidClose(found)
         }
 
-        detachedBecameKeyObserver = NotificationCenter.default.addObserver(
+        panel.becameKeyObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeKeyNotification,
             object: win,
             queue: .main
-        ) { [weak self, weak win] _ in
-            guard let self = self, let w = win, self.detachedChatWindow === w else { return }
-            w.orderFrontRegardless()
+        ) { [weak panel] _ in
+            panel?.window.orderFrontRegardless()
         }
 
-        detachedChatWindow = win
-    }
-
-    private func removeDetachedBecameKeyObserver() {
-        if let o = detachedBecameKeyObserver {
-            NotificationCenter.default.removeObserver(o)
-            detachedBecameKeyObserver = nil
-        }
-    }
-
-    private func completeDetachedChatTeardownAfterWindowClosed() {
-        if let o = detachedWindowCloseObserver {
-            NotificationCenter.default.removeObserver(o)
-            detachedWindowCloseObserver = nil
-        }
-        removeDetachedBecameKeyObserver()
-        let sess = detachedSession
-        detachedSession = nil
-        detachedTerminalView = nil
-        detachedProvider = nil
-        detachedChatWindow = nil
-        DispatchQueue.main.async {
-            sess?.terminate()
-        }
+        detachedPanels.append(panel)
+        return panel
     }
 
     func refreshDetachedChromeTheme() {
-        guard let container = detachedChatWindow?.contentView else { return }
         let t = resolvedTheme
-        container.layer?.backgroundColor = t.popoverBg.cgColor
-        container.layer?.borderColor = t.popoverBorder.cgColor
-        for view in container.subviews {
-            if abs(view.frame.height - 1) < 0.5 {
-                view.layer?.backgroundColor = t.separatorColor.cgColor
-            }
-        }
-        if let container = detachedChatWindow?.contentView,
-           let titleBar = container.subviews.first(where: { abs($0.frame.height - 28) < 0.5 && abs($0.frame.maxY - container.bounds.height) < 2 }) {
-            titleBar.layer?.backgroundColor = t.titleBarBg.cgColor
-            for sub in titleBar.subviews {
-                if let tf = sub as? NSTextField {
-                    tf.textColor = t.titleText
-                    tf.font = t.titleFont
-                }
-                if let btn = sub as? NSButton, btn.image != nil {
-                    btn.contentTintColor = t.titleText.withAlphaComponent(0.75)
-                }
-            }
-        }
         let brightness = t.popoverBg.redComponent * 0.299 + t.popoverBg.greenComponent * 0.587 + t.popoverBg.blueComponent * 0.114
-        detachedChatWindow?.appearance = NSAppearance(named: brightness < 0.5 ? .darkAqua : .aqua)
-        updateDetachedTitleBarProviderLabels()
+        let appearance = NSAppearance(named: brightness < 0.5 ? .darkAqua : .aqua)
+        for panel in detachedPanels {
+            guard let container = panel.window.contentView else { continue }
+            container.layer?.backgroundColor = t.popoverBg.cgColor
+            container.layer?.borderColor = t.popoverBorder.cgColor
+            for view in container.subviews {
+                if abs(view.frame.height - 1) < 0.5 {
+                    view.layer?.backgroundColor = t.separatorColor.cgColor
+                }
+            }
+            if let titleBar = container.subviews.first(where: { abs($0.frame.height - 28) < 0.5 && abs($0.frame.maxY - container.bounds.height) < 2 }) {
+                titleBar.layer?.backgroundColor = t.titleBarBg.cgColor
+                for sub in titleBar.subviews {
+                    if let tf = sub as? NSTextField {
+                        tf.textColor = t.titleText
+                        tf.font = t.titleFont
+                    }
+                    if let btn = sub as? NSButton, btn.image != nil {
+                        btn.contentTintColor = t.titleText.withAlphaComponent(0.75)
+                    }
+                }
+            }
+            panel.window.appearance = appearance
+            updateDetachedTitleBarProviderLabels(for: panel.window)
+        }
     }
 
     @objc func showProviderMenu(_ sender: Any) {
@@ -952,7 +998,12 @@ class WalkerCharacter {
         providerMenuHostWindow = hostWindow
         let menu = NSMenu()
         let menuFont = NSFont.systemFont(ofSize: 12, weight: .regular)
-        let selected: AgentProvider = (hostWindow === detachedChatWindow) ? (detachedProvider ?? provider) : provider
+        let selected: AgentProvider
+        if let panel = detachedPanel(for: hostWindow) {
+            selected = panel.providerOverride ?? provider
+        } else {
+            selected = provider
+        }
         for p in AgentProvider.allCases {
             let item = NSMenuItem(title: p.displayName, action: #selector(providerMenuItemSelected(_:)), keyEquivalent: "")
             item.target = self
@@ -964,7 +1015,7 @@ class WalkerCharacter {
             }
             menu.addItem(item)
         }
-        let menuX: CGFloat = (hostWindow === detachedChatWindow) ? view.frame.minX : 10
+        let menuX: CGFloat = detachedPanel(for: hostWindow) != nil ? view.frame.minX : 10
         menu.popUp(positioning: nil, at: NSPoint(x: menuX, y: 0), in: titleBar)
     }
 
@@ -974,12 +1025,13 @@ class WalkerCharacter {
 
         let host = providerMenuHostWindow
         providerMenuHostWindow = nil
+        guard let host else { return }
 
-        if host === detachedChatWindow {
-            let current = detachedProvider ?? provider
+        if let panel = detachedPanels.first(where: { $0.window === host }) {
+            let current = panel.providerOverride ?? provider
             guard newProvider != current else { return }
-            detachedProvider = newProvider
-            restartDetachedSessionForCurrentDetachedProvider()
+            panel.providerOverride = newProvider
+            restartDetachedSession(for: host)
             return
         }
 
@@ -999,33 +1051,28 @@ class WalkerCharacter {
         }
     }
 
-    private func restartDetachedSessionForCurrentDetachedProvider() {
-        guard detachedChatWindow != nil, let term = detachedTerminalView else { return }
-        let p = detachedProvider ?? provider
-        detachedSession?.terminate()
-        detachedSession = nil
+    private func restartDetachedSession(for hostWindow: NSWindow) {
+        guard let panel = detachedPanel(for: hostWindow) else { return }
+        let term = panel.terminal
+        let p = panel.providerOverride ?? provider
+        panel.session.terminate()
         currentStreamingText = ""
         term.provider = p
         term.resetState()
         term.showSessionMessage()
         let newSession = p.createSession()
-        detachedSession = newSession
-        wireSession(newSession, terminal: term)
-        term.onSendMessage = { [weak self] message in
-            self?.detachedSession?.send(message: message)
-        }
-        term.onClearRequested = { [weak self] in
-            self?.resetSession(for: .detachedWindow)
-        }
+        panel.session = newSession
+        bindDetachedPanelCallbacks(panel)
         newSession.start()
-        updateDetachedTitleBarProviderLabels()
+        updateDetachedTitleBarProviderLabels(for: hostWindow)
     }
 
-    private func updateDetachedTitleBarProviderLabels() {
-        guard let cv = detachedChatWindow?.contentView else { return }
+    private func updateDetachedTitleBarProviderLabels(for hostWindow: NSWindow) {
+        guard let panel = detachedPanel(for: hostWindow) else { return }
+        guard let cv = panel.window.contentView else { return }
         let t = resolvedTheme
-        let p = detachedProvider ?? provider
-        detachedChatWindow?.title = "\(name) — \(p.displayName)"
+        let p = panel.providerOverride ?? provider
+        panel.window.title = "\(name) — \(p.displayName)"
         guard let titleBar = cv.subviews.first(where: { abs($0.frame.height - 28) < 0.5 && abs($0.frame.maxY - cv.bounds.height) < 2 }) else { return }
 
         var titleField: NSTextField?
@@ -1052,8 +1099,10 @@ class WalkerCharacter {
 
     @objc func copyLastResponseFromButton(_ sender: Any?) {
         let term: TerminalView?
-        if let view = sender as? NSView, view.window === detachedChatWindow {
-            term = detachedTerminalView
+        if let view = sender as? NSView,
+           let w = view.window,
+           let panel = detachedPanel(for: w) {
+            term = panel.terminal
         } else {
             term = terminalView
         }
@@ -1062,8 +1111,10 @@ class WalkerCharacter {
 
     @objc func refreshSessionFromButton(_ sender: Any?) {
         guard !isOnboarding else { return }
-        if let view = sender as? NSView, view.window === detachedChatWindow {
-            resetSession(for: .detachedWindow)
+        if let view = sender as? NSView,
+           let w = view.window,
+           detachedPanel(for: w) != nil {
+            resetSession(for: .detachedWindow(w))
         } else {
             resetSession(for: .dockPopover)
         }
