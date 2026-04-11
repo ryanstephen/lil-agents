@@ -1,51 +1,48 @@
-# lil agents
+# lil agents · Merit & Muse fork
 
-![lil agents](hero-thumbnail.png)
+Personal fork of **[lil agents](https://github.com/ryanstephen/lil-agents)** — tiny AI companions on the macOS dock. This repo is **built on top of that project**; upstream owns the core app idea, architecture, and baseline features.
 
-Tiny AI companions that live on your macOS dock.
+**Upstream repository:** [github.com/ryanstephen/lil-agents](https://github.com/ryanstephen/lil-agents)  
+**This fork:** custom characters (**Merit** & **Muse**), animation assets, UI experiments, and ongoing work on branches like `fork/wip-all-changes`.
 
-**Bruce** and **Jazz** walk back and forth above your dock. Click one to open an AI terminal. They walk, they think, they vibe.
+Official downloads and product site for the original app: [lilagents.xyz](https://lilagents.xyz).
 
-Supports **Claude Code**, **OpenAI Codex**, **GitHub Copilot**, and **Google Gemini** CLIs — switch between them from the menubar.
+## Demo
 
-**[Download for macOS](https://lilagents.xyz)** · [Website](https://lilagents.xyz)
+_Add a link or embed for your demo video here._
 
-## features
+## Process
 
-- Animated characters rendered from transparent HEVC video
-- Click a character to chat with AI in a themed popover terminal
-- Switch between Claude, Codex, Copilot, and Gemini from the menubar
-- Four visual themes: Peach, Midnight, Cloud, Moss
-- Slash commands: `/clear`, `/copy`, `/help` in the chat input
-- Copy last response button in the title bar
-- Thinking bubbles with playful phrases while your agent works
-- Sound effects on completion
-- First-run onboarding with a friendly welcome
-- Auto-updates via Sparkle
+_Notes on how you created the animation, iteration workflow, tools, etc._
 
-## requirements
+## Git remotes & workflow
 
-- macOS Sonoma (14.0+) — including Sequoia (15.x)
-- **Universal binary** — runs natively on both Apple Silicon and Intel Macs
-- At least one supported CLI installed:
-  - [Claude Code](https://claude.ai/download) — `curl -fsSL https://claude.ai/install.sh | sh`
-  - [OpenAI Codex](https://github.com/openai/codex) — `npm install -g @openai/codex`
-  - [GitHub Copilot](https://github.com/github/copilot-cli) — `brew install copilot-cli`
-  - [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) — `npm install -g @google/gemini-cli`
+| Remote | Points to |
+| ---------- | --------- |
+| `origin`   | **Your fork** (this GitHub repo — push your branches here). |
+| `upstream` | **Original repo** — [ryanstephen/lil-agents](https://github.com/ryanstephen/lil-agents). |
 
-## building
+If `upstream` is not set yet:
 
-Open `lil-agents.xcodeproj` in Xcode and hit run.
+```bash
+git remote add upstream https://github.com/ryanstephen/lil-agents.git
+git fetch upstream
+```
 
-## privacy
+**Keeping up with upstream**
 
-lil agents runs entirely on your Mac and sends no personal data anywhere.
+1. `git fetch upstream`
+2. Merge or rebase `upstream/main` into a **tracking branch** you keep close to upstream (e.g. local `main`).
+3. When you want those changes in your experimental branch, merge (or rebase) that into `fork/wip-all-changes` **when you’re ready**, and resolve conflicts there.
 
-- **Your data stays local.** The app plays bundled animations and calculates your dock size to position the characters. No project data, file paths, or personal information is collected or transmitted.
-- **AI providers.** Conversations are handled entirely by the CLI process you choose (Claude, Codex, Copilot, or Gemini) running locally. lil agents does not intercept, store, or transmit your chat content. Any data sent to the provider is governed by their respective terms and privacy policies.
-- **No accounts.** No login, no user database, no analytics in the app.
-- **Updates.** lil agents uses Sparkle to check for updates, which sends your app version and macOS version. Nothing else.
+That way `main` (or whatever you use as “clean upstream + minimal fork fixes”) stays easy to compare to `upstream/main`, and WIP stays a sandbox.
 
-## license
+## Building
 
-MIT License. See [LICENSE](LICENSE) for details.
+Open `lil-agents.xcodeproj` in Xcode and run the **LilAgents** scheme.
+
+Requirements and provider CLIs match upstream; see the [upstream README](https://github.com/ryanstephen/lil-agents/blob/main/README.md) for CLI install links and privacy notes.
+
+## License
+
+MIT — see [LICENSE](LICENSE) (same license family as upstream; refer to upstream for their exact terms).
