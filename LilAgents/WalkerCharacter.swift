@@ -558,18 +558,22 @@ class WalkerCharacter {
         wireSession(s, terminal: term)
     }
 
-    /// Close popped-out chat without going through `willClose` teardown (e.g. global provider switch).
+    /// Close popped-out chat without going through `didClose` teardown (e.g. global provider switch).
     func discardDetachedChatSilently() {
         if let o = detachedWindowCloseObserver {
             NotificationCenter.default.removeObserver(o)
             detachedWindowCloseObserver = nil
         }
-        detachedSession?.terminate()
+        let sess = detachedSession
+        let win = detachedChatWindow
         detachedSession = nil
         detachedTerminalView = nil
         detachedProvider = nil
-        detachedChatWindow?.close()
         detachedChatWindow = nil
+        win?.close()
+        DispatchQueue.main.async {
+            sess?.terminate()
+        }
     }
 
     private func resetSession(for host: ChatChromeHost) {
@@ -810,31 +814,32 @@ class WalkerCharacter {
 
         let closingDetachedWindow = win
         detachedWindowCloseObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification,
+            forName: Notification.Name("NSWindowDidClose"),
             object: closingDetachedWindow,
             queue: .main
-        ) { [weak self] _ in
-            guard let self = self else { return }
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                guard self.detachedChatWindow === closingDetachedWindow else { return }
-                self.teardownDetachedChatWindow()
-            }
+        ) { [weak self] note in
+            guard let self = self,
+                  let closed = note.object as? NSWindow,
+                  closed === self.detachedChatWindow else { return }
+            self.completeDetachedChatTeardownAfterWindowClosed()
         }
 
         detachedChatWindow = win
     }
 
-    private func teardownDetachedChatWindow() {
+    private func completeDetachedChatTeardownAfterWindowClosed() {
         if let o = detachedWindowCloseObserver {
             NotificationCenter.default.removeObserver(o)
             detachedWindowCloseObserver = nil
         }
-        detachedSession?.terminate()
+        let sess = detachedSession
         detachedSession = nil
         detachedTerminalView = nil
         detachedProvider = nil
         detachedChatWindow = nil
+        DispatchQueue.main.async {
+            sess?.terminate()
+        }
     }
 
     func refreshDetachedChromeTheme() {
