@@ -275,6 +275,14 @@ class WalkerCharacter {
             openOnboardingPopover()
             return
         }
+        if let detached = detachedChatWindow {
+            detached.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            if let field = detachedTerminalView?.inputField {
+                detached.makeFirstResponder(field)
+            }
+            return
+        }
         if isIdleForPopover {
             closePopover()
         } else {

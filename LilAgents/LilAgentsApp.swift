@@ -150,7 +150,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if char.detachedChatWindow != nil {
                 char.refreshDetachedChromeTheme()
                 char.detachedTerminalView?.reapplyAppearanceFromTheme()
-                return
             }
             let wasOpen = char.isIdleForPopover
             if wasOpen { char.popoverWindow?.orderOut(nil) }
@@ -164,6 +163,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     char.terminalView?.replayHistory(session.history)
                 }
                 char.updatePopoverPosition()
+                char.ensurePopoverAboveCharacterWindow()
                 char.popoverWindow?.orderFrontRegardless()
                 char.popoverWindow?.makeKey()
                 if let terminal = char.terminalView {
