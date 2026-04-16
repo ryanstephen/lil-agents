@@ -54,7 +54,46 @@ class CharacterContentView: NSView {
         return hitRect.contains(localPoint) ? self : nil
     }
 
+    // Track whether a drag was initiated so we can distinguish click vs drag.
+    private var mouseDownScreenPos: NSPoint = .zero
+    private var hasDragged = false
+    private static let dragThreshold: CGFloat = 4.0
+
     override func mouseDown(with event: NSEvent) {
-        character?.handleClick()
+        hasDragged = false
+        mouseDownScreenPos = NSEvent.mouseLocation
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let character = character, let win = window else { return }
+
+        let currentScreenPos = NSEvent.mouseLocation
+
+        if !hasDragged {
+            let dx = currentScreenPos.x - mouseDownScreenPos.x
+            let dy = currentScreenPos.y - mouseDownScreenPos.y
+            guard dx * dx + dy * dy >= Self.dragThreshold * Self.dragThreshold else { return }
+            hasDragged = true
+            character.beginDrag(
+                windowOriginAtDragStart: win.frame.origin,
+                cursorScreenPos: mouseDownScreenPos
+            )
+        }
+
+        character.continueDrag(cursorScreenPos: currentScreenPos)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if hasDragged, let character = character {
+            // We need dockTopY to compute the landing Y.
+            // Read it from the screen the window is currently on.
+            let screen = window?.screen ?? NSScreen.main
+            let dockTopY = screen?.visibleFrame.origin.y ?? 0
+            character.endDrag(dockTopY: dockTopY)
+        } else {
+            // Short tap with no drag → treat as click
+            character?.handleClick()
+        }
+        hasDragged = false
     }
 }

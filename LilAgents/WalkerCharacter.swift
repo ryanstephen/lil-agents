@@ -77,6 +77,23 @@ class WalkerCharacter {
     var walkStartPixel: CGFloat = 0.0
     var walkEndPixel: CGFloat = 0.0
 
+    // Drag & physics state
+    var isDragging = false
+    var dragOffsetInWindow: NSPoint = .zero   // cursor offset from window origin when drag started
+    var isPhysicsFalling = false
+    var physicsVelocityY: CGFloat = 0         // px/s, positive = up (AppKit)
+    var physicsVelocityX: CGFloat = 0         // px/s, positive = right
+    var physicsStartTime: CFTimeInterval = 0
+    var physicsPosX: CGFloat = 0              // current window origin.x during fall
+    var physicsPosY: CGFloat = 0              // current window origin.y during fall
+    // Previous drag positions for velocity estimation
+    private var dragPrevPos: NSPoint = .zero
+    private var dragPrevTime: CFTimeInterval = 0
+    private var dragCurrPos: NSPoint = .zero
+    private var dragCurrTime: CFTimeInterval = 0
+    // Landing Y (Dock surface) computed when drag ends
+    private var landingY: CGFloat = 0
+
     // Onboarding
     var isOnboarding = false
 
@@ -945,10 +962,151 @@ class WalkerCharacter {
         }
     }
 
+    // MARK: - Drag Handling
+
+    func beginDrag(windowOriginAtDragStart: NSPoint, cursorScreenPos: NSPoint) {
+        // Pause normal walking / physics
+        isDragging = true
+        isPhysicsFalling = false
+        isWalking = false
+        isPaused = true
+        queuePlayer.pause()
+        queuePlayer.seek(to: .zero)
+
+        // Offset of cursor inside the window frame (so character doesn't jump)
+        dragOffsetInWindow = NSPoint(
+            x: cursorScreenPos.x - windowOriginAtDragStart.x,
+            y: cursorScreenPos.y - windowOriginAtDragStart.y
+        )
+
+        dragCurrPos = cursorScreenPos
+        dragCurrTime = CACurrentMediaTime()
+        dragPrevPos = cursorScreenPos
+        dragPrevTime = dragCurrTime
+
+        // Elevate window above siblings while dragging
+        window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 20)
+    }
+
+    func continueDrag(cursorScreenPos: NSPoint) {
+        guard isDragging else { return }
+
+        dragPrevPos = dragCurrPos
+        dragPrevTime = dragCurrTime
+        dragCurrPos = cursorScreenPos
+        dragCurrTime = CACurrentMediaTime()
+
+        let newOrigin = NSPoint(
+            x: cursorScreenPos.x - dragOffsetInWindow.x,
+            y: cursorScreenPos.y - dragOffsetInWindow.y
+        )
+        window.setFrameOrigin(newOrigin)
+    }
+
+    func endDrag(dockTopY: CGFloat) {
+        guard isDragging else { return }
+        isDragging = false
+
+        // Estimate release velocity from last two drag samples
+        let dt = dragCurrTime - dragPrevTime
+        if dt > 0.001 {
+            physicsVelocityX = (dragCurrPos.x - dragPrevPos.x) / CGFloat(dt)
+            physicsVelocityY = (dragCurrPos.y - dragPrevPos.y) / CGFloat(dt)
+        } else {
+            physicsVelocityX = 0
+            physicsVelocityY = 0
+        }
+
+        // Clamp to reasonable max speed
+        let maxSpeed: CGFloat = 3000
+        physicsVelocityX = max(-maxSpeed, min(maxSpeed, physicsVelocityX))
+        physicsVelocityY = max(-maxSpeed, min(maxSpeed, physicsVelocityY))
+
+        physicsPosX = window.frame.origin.x
+        physicsPosY = window.frame.origin.y
+        physicsStartTime = CACurrentMediaTime()
+
+        // Compute the resting Y for this character
+        let bottomPadding = displayHeight * 0.15
+        landingY = dockTopY - bottomPadding + yOffset
+
+        isPhysicsFalling = true
+        pauseEndTime = CACurrentMediaTime() + Double.random(in: 2.0...5.0)
+    }
+
     // MARK: - Frame Update
 
     func update(dockX: CGFloat, dockWidth: CGFloat, dockTopY: CGFloat) {
         currentTravelDistance = max(dockWidth - displayWidth, 0)
+
+        // ── Dragging: window is positioned directly by continueDrag(), nothing to do ──
+        if isDragging {
+            updateThinkingBubble()
+            return
+        }
+
+        // ── Physics falling / bouncing ──
+        if isPhysicsFalling {
+            let now = CACurrentMediaTime()
+            let dt = CGFloat(now - physicsStartTime)
+            physicsStartTime = now
+
+            let gravity: CGFloat = -1800   // px/s², negative = downward in AppKit
+            let friction: CGFloat = 0.985  // horizontal damping per frame
+
+            physicsVelocityY += gravity * dt
+            physicsVelocityX *= friction
+
+            physicsPosX += physicsVelocityX * dt
+            physicsPosY += physicsVelocityY * dt
+
+            // Clamp X to screen bounds
+            if let screen = window.screen ?? NSScreen.main {
+                let minX = screen.frame.minX
+                let maxX = screen.frame.maxX - displayWidth
+                if physicsPosX < minX {
+                    physicsPosX = minX
+                    physicsVelocityX = abs(physicsVelocityX) * 0.5
+                } else if physicsPosX > maxX {
+                    physicsPosX = maxX
+                    physicsVelocityX = -abs(physicsVelocityX) * 0.5
+                }
+            }
+
+            // Landing check
+            if physicsPosY <= landingY {
+                physicsPosY = landingY
+                let restitution: CGFloat = 0.38
+                let bounceCutoff: CGFloat = 80
+
+                if abs(physicsVelocityY) > bounceCutoff {
+                    // Bounce back up
+                    physicsVelocityY = -physicsVelocityY * restitution
+                    physicsVelocityX *= 0.7
+                } else {
+                    // Settle on the ground
+                    isPhysicsFalling = false
+                    physicsVelocityY = 0
+                    physicsVelocityX = 0
+
+                    // Snap positionProgress to where we landed
+                    if currentTravelDistance > 0 {
+                        let landedPixel = physicsPosX - dockX - currentFlipCompensation
+                        positionProgress = min(max(landedPixel / currentTravelDistance, 0), 1)
+                    }
+                    window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue)
+                    window.setFrameOrigin(NSPoint(x: physicsPosX, y: physicsPosY))
+                    updateThinkingBubble()
+                    return
+                }
+            }
+
+            window.setFrameOrigin(NSPoint(x: physicsPosX, y: physicsPosY))
+            updateThinkingBubble()
+            return
+        }
+
+        // ── Normal walk / idle logic ──
         if isIdleForPopover {
             let travelDistance = currentTravelDistance
             let x = dockX + travelDistance * positionProgress + currentFlipCompensation

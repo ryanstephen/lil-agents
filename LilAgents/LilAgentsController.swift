@@ -242,8 +242,10 @@ class LilAgentsController {
             char.update(dockX: dockX, dockWidth: dockWidth, dockTopY: dockTopY)
         }
 
+        // Don't override the elevated level of a dragged or physics-falling character.
         let sorted = activeChars.sorted { $0.positionProgress < $1.positionProgress }
         for (i, char) in sorted.enumerated() {
+            guard !char.isDragging && !char.isPhysicsFalling else { continue }
             char.window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + i)
         }
     }
