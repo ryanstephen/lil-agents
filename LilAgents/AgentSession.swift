@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Provider
 
 enum AgentProvider: String, CaseIterable {
-    case claude, codex, copilot, gemini, opencode, openclaw
+    case claude, codex, copilot, gemini, opencode, openclaw, foundationModels
 
     private static let defaultsKey = "selectedProvider"
 
@@ -19,12 +19,13 @@ enum AgentProvider: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .claude:   return "Claude"
-        case .codex:    return "Codex"
-        case .copilot:  return "Copilot"
-        case .gemini:   return "Gemini"
-        case .opencode: return "OpenCode"
-        case .openclaw: return "OpenClaw"
+        case .claude:           return "Claude"
+        case .codex:            return "Codex"
+        case .copilot:          return "Copilot"
+        case .gemini:           return "Gemini"
+        case .opencode:         return "OpenCode"
+        case .openclaw:         return "OpenClaw"
+        case .foundationModels: return "On-Device"
         }
     }
 
@@ -43,12 +44,13 @@ enum AgentProvider: String, CaseIterable {
 
     var binaryName: String {
         switch self {
-        case .claude:   return "claude"
-        case .codex:    return "codex"
-        case .copilot:  return "copilot"
-        case .gemini:   return "gemini"
-        case .opencode: return "opencode"
-        case .openclaw: return "openclaw"
+        case .claude:           return "claude"
+        case .codex:            return "codex"
+        case .copilot:          return "copilot"
+        case .gemini:           return "gemini"
+        case .opencode:         return "opencode"
+        case .openclaw:         return "openclaw"
+        case .foundationModels: return ""
         }
     }
 
@@ -63,6 +65,15 @@ enum AgentProvider: String, CaseIterable {
             // OpenClaw is network-based, not a local binary
             if provider == .openclaw {
                 availability[provider] = OpenClawConfig.load().authToken.isEmpty == false
+                continue
+            }
+            // FoundationModels is framework-based, not a local binary
+            if provider == .foundationModels {
+                if #available(macOS 26.0, *) {
+                    availability[provider] = FoundationModelsSession.isAvailable()
+                } else {
+                    availability[provider] = false
+                }
                 continue
             }
             group.enter()
@@ -83,6 +94,12 @@ enum AgentProvider: String, CaseIterable {
 
     var isAvailable: Bool {
         if self == .openclaw { return OpenClawConfig.load().authToken.isEmpty == false }
+        if self == .foundationModels {
+            if #available(macOS 26.0, *) {
+                return FoundationModelsSession.isAvailable()
+            }
+            return false
+        }
         return AgentProvider.availability[self] ?? false
     }
 
@@ -105,6 +122,8 @@ enum AgentProvider: String, CaseIterable {
             return "To install, run this in Terminal:\n  curl -fsSL https://opencode.ai/install | bash"
         case .openclaw:
             return "OpenClaw is a self-hosted AI gateway.\n\nInstall: npm install -g openclaw\nStart:   openclaw gateway run\n\nDocs: https://docs.openclaw.ai"
+        case .foundationModels:
+            return "Apple Intelligence requires macOS 26+ on Apple Silicon\nwith Apple Intelligence enabled in System Settings."
         }
     }
 
@@ -116,6 +135,13 @@ enum AgentProvider: String, CaseIterable {
         case .gemini:   return GeminiSession()
         case .opencode: return OpenCodeSession()
         case .openclaw: return OpenClawSession()
+        case .foundationModels:
+            if #available(macOS 26.0, *) {
+                return FoundationModelsSession()
+            } else {
+                // Fallback — should never reach here if isAvailable is checked first
+                return ClaudeSession()
+            }
         }
     }
 }

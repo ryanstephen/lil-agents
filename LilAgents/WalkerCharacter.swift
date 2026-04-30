@@ -506,6 +506,21 @@ class WalkerCharacter {
     }
 
     func resetSession() {
+        // For FoundationModels, reset context without full teardown
+        if #available(macOS 26.0, *),
+           let fmSession = session as? FoundationModelsSession {
+            fmSession.resetContext()
+            currentStreamingText = ""
+            showingCompletion = false
+            currentPhrase = ""
+            completionBubbleExpiry = 0
+            hideBubble()
+            terminalView?.resetState()
+            terminalView?.showSessionMessage()
+            fmSession.history = []
+            return
+        }
+
         session?.terminate()
         session = nil
         currentStreamingText = ""
