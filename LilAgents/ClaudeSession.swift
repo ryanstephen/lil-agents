@@ -55,8 +55,7 @@ class ClaudeSession: AgentSession {
             "-p",
             "--output-format", "stream-json",
             "--input-format", "stream-json",
-            "--verbose",
-            "--dangerously-skip-permissions"
+            "--verbose"
         ]
         proc.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
         proc.environment = ShellEnvironment.processEnvironment()
